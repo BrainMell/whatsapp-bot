@@ -1,7 +1,7 @@
 'use strict';
 // ⚔️ CONQUEST — tunables. Everything a designer would want to rebalance lives here.
 // Feature flag: GW_CONQUEST=1 turns the whole layer on (off => nothing in this dir is reached).
-const enabled = () => String(process.env.GW_CONQUEST || '') === '1';
+const enabled = () => String(process.env.GW_CONQUEST == null ? '1' : process.env.GW_CONQUEST) !== '0'; // default ON; GW_CONQUEST=0 restores the legacy ruins war
 
 const CFG = Object.freeze({
     // ── map shape ────────────────────────────────────────────────────────────

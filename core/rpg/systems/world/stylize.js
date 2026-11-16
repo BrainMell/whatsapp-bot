@@ -19,7 +19,7 @@ const PRESETS = {
     overview: { outline: { px: 1.2, color: INK }, posterize: { levels: 8, mix: 0.35 }, grade: { contrast: 1.05, sat: 1.1, warm: 0 }, shadeBand: null, edge: null, pixel: 0 },
     // chunky pixel identity (opt-in)
     // conquest: real 3D hex world + pixel shader over the environment (chunky 3px pixels, palette-posterised, ink edges)
-    conquest: { outline: { px: 3, color: INK }, posterize: { levels: 7, mix: 0.5 }, grade: { contrast: 1.06, sat: 0.9, warm: 0.04 }, shadeBand: { below: 0.34, dark: 0.16 }, edge: { thick: 1, thresh: 0.5, color: INK, strength: 0.4 }, pixel: 3 },
+    conquest: { outline: { px: 3, color: INK }, posterize: { levels: 7, mix: 0.5 }, grade: { contrast: 1.08, sat: 0.8, warm: 0.0, leaf: 0.4, cel: 5, celMix: 0.9 }, shadeBand: { below: 0.34, dark: 0.16 }, edge: { thick: 1, thresh: 0.5, color: INK, strength: 0.4 }, pixel: 3 },
     pixel: { outline: { px: 3, color: INK }, posterize: { levels: 6, mix: 0.6 }, grade: { contrast: 1.08, sat: 1.15, warm: 0.02 }, shadeBand: { below: 0.34, dark: 0.2 }, edge: { thick: 1, thresh: 0.2, color: INK, strength: 0.9 }, pixel: 2 },
 };
 const preset = (p) => (typeof p === 'string' ? PRESETS[p] : p) || PRESETS.aldafold;
@@ -53,6 +53,8 @@ function grade(cv, p) {
         if (g.contrast) { r = (r - 0.5) * g.contrast + 0.5; gg = (gg - 0.5) * g.contrast + 0.5; b = (b - 0.5) * g.contrast + 0.5; }
         const lum = 0.299 * r + 0.587 * gg + 0.114 * b;
         if (g.sat) { r = lum + (r - lum) * g.sat; gg = lum + (gg - lum) * g.sat; b = lum + (b - lum) * g.sat; }
+        if (g.leaf && gg > r * 0.8 && r > b * 1.4) { const k = g.leaf; r -= (r - b) * k; gg *= 1 - 0.3 * k; b *= 1 - 0.1 * k; }   // lime/yellow grass -> leafy green
+        if (g.cel) { const l2 = 0.299 * r + 0.587 * gg + 0.114 * b; if (l2 > 0.02) { const bands = g.cel; const bl = (Math.floor(l2 * bands) + 0.5) / bands; const f = Math.max(0.72, Math.min(1.22, bl / l2)); const m = g.celMix == null ? 0.7 : g.celMix; const ff = 1 + (f - 1) * m; r *= ff; gg *= ff; b *= ff; } }   // cel shading: hard light bands
         if (g.warm) { r += g.warm; b -= g.warm; }
         if (ps) { const q = (v) => Math.round(v * L) / L; r = r + (q(r) - r) * ps.mix; gg = gg + (q(gg) - gg) * ps.mix; b = b + (q(b) - b) * ps.mix; }
         if (sb && lum < sb.below) { const x = i % W, y = (i / W) | 0; if (BAYER[(x & 3) + (y & 3) * 4] > lum / sb.below) { r *= 1 - sb.dark; gg *= 1 - sb.dark; b *= 1 - sb.dark; } }   // ordered-dither graphic shadow band
