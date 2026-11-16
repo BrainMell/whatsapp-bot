@@ -12,7 +12,7 @@ function wrap(ctx, text, x, y, w, lh) { const words = String(text).split(' '); l
 async function siegeInProcess(b) {
     if (b.phase !== 'wall' && process.env.CONQUEST_ARENA !== '0') { // golem/titan fight → dedicated arena (3D world + pixel shader), not the wall diorama
         const A = require('./arena'); const realm = (b.tileId || '').split(':')[0]; const gs = b.golems.filter((x) => x.hp > 0);
-        const en = gs.map((g, i) => { const titan = b.isTitan && i === 0; return { cq: titan ? `golems/titan_${realm}.png` : `golems/${g.kind}.png`, name: titan ? 'TITAN' : g.kind.toUpperCase(), hp: g.hp, max: g.max, h: titan ? 420 : 250, gap: titan ? 260 : 210 }; });
+        const en = gs.map((g, i) => { const titan = b.isTitan && i === 0; return { cq: titan ? `golems/titan_${realm}.png` : `golems/${g.kind}.png`, name: titan ? 'TITAN' : g.kind.toUpperCase(), hp: g.hp, max: g.max, h: titan ? 420 : 250, gap: titan ? 220 : 170 }; });
         const party = Object.values(b.party).map((m) => ({ name: m.name, hp: m.hp, max: m.max, sprite: m.sprite }));
         const cv = await A.arenaCard({ kind: b.isTitan ? 'titan' : (b.kind === 'ley_gate' ? 'ley_gate' : 'field'), seed: b.id, biome: b.biome, title: b.tileName, sub: `${b.attacker} · round ${b.round}/12`, right: b.isTitan ? 'TITAN' : 'GARRISON', lines: b.outcome ? [b.outcome === 'won' ? 'STRONGHOLD TAKEN' : 'ASSAULT REPELLED'] : ['Face the guardians', 'cq strike · guard · heal'], enemies: en, party });
         return cv.toBuffer('image/jpeg', { quality: 0.9 });
