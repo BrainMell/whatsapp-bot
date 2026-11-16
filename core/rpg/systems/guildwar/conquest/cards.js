@@ -93,19 +93,19 @@ function paintWorld(ctx, g, snap, x0, y0, w, h, S, IW, IH, opts = {}) {
     return { cx, cy, cells, ox, oy, S, RP };
 }
 
-function lbl(ctx, text, x, y, size, color = PAPER, align = 'center') { ctx.font = `${size}px Pixeloid, sans-serif`; ctx.textAlign = align; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, size / 4); ctx.strokeStyle = INK; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y); }
-function panel(ctx, x, y, w, h, r = 18, fill = 'rgba(20,16,26,.92)', stroke = GOLD) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = stroke; ctx.stroke(); }
+function lbl(ctx, text, x, y, size, color = PAPER, align = 'center') { ctx.font = `${size}px Cinzel, serif`; ctx.textAlign = align; ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, size / 4); ctx.strokeStyle = INK; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y); }
+function panel(ctx, x, y, w, h, r = 6, fill = 'rgba(20,16,26,.92)', stroke = GOLD) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 1.6; ctx.strokeStyle = stroke; ctx.stroke(); }
 function fitText(ctx, text, maxW, size, fam = 'Pixeloid') { let s = size; while (s > 12) { ctx.font = `${s}px ${fam}, sans-serif`; if (ctx.measureText(text).width <= maxW) break; s -= 2; } return s; }
 
 const CW = 1056, CH = 1320; // 4:5 portrait — fills the chat width and most of the screen
 function frame(title, sub, right) {
     fonts(); const c = createCanvas(CW, CH); const ctx = c.getContext('2d');
-    const gr = ctx.createLinearGradient(0, 0, 0, CH); gr.addColorStop(0, '#2a1d3a'); gr.addColorStop(1, '#120d18'); ctx.fillStyle = gr; ctx.fillRect(0, 0, CW, CH);
+    const gr = ctx.createLinearGradient(0, 0, 0, CH); gr.addColorStop(0, '#1c1a22'); gr.addColorStop(1, '#0d0c10'); ctx.fillStyle = gr; ctx.fillRect(0, 0, CW, CH);
     // header
-    ctx.fillStyle = '#1b1226'; ctx.fillRect(0, 0, CW, 138); ctx.fillStyle = GOLD; ctx.fillRect(0, 134, CW, 4);
-    ctx.textAlign = 'left'; ctx.font = '60px CinzelD, serif'; ctx.fillStyle = INK; ctx.fillText(title, 33, 76); ctx.fillStyle = GOLD; ctx.fillText(title, 30, 73);
-    ctx.font = '26px Pixeloid, sans-serif'; ctx.fillStyle = '#cdb98a'; ctx.fillText(sub || '', 30, 116);
-    if (right) { ctx.textAlign = 'right'; ctx.font = '30px Pixeloid, sans-serif'; ctx.fillStyle = '#ff9d6c'; ctx.fillText(right, CW - 30, 60); }
+    ctx.fillStyle = '#121016'; ctx.fillRect(0, 0, CW, 138); ctx.fillStyle = GOLD; ctx.fillRect(0, 136, CW, 1.5);
+    ctx.textAlign = 'left'; ctx.font = '54px CinzelD, serif'; ctx.fillStyle = '#e8d9a8'; ctx.fillText(title, 30, 76);
+    ctx.font = '26px Cinzel, serif'; ctx.fillStyle = '#cdb98a'; ctx.fillText(sub || '', 30, 116);
+    if (right) { ctx.textAlign = 'right'; ctx.font = '30px Cinzel, serif'; ctx.fillStyle = '#ff9d6c'; ctx.fillText(right, CW - 30, 60); }
     return { c, ctx };
 }
 /** blit a low-res canvas into the card with hard pixels */
@@ -134,7 +134,7 @@ async function worldCard(snap, opts = {}) {
     const list = W.cells.filter((t) => KEYK.includes(t.kind) || (own[t.id] && own[t.id].owner && !over && ['fortress', 'keep', 'ruins', 'shrine', 'titan', 'ley_gate', 'gem_vein'].includes(t.kind))).filter((t) => !over || t.kind === 'keep' || t.kind === 'titan' || (own[t.id] && own[t.id].owner) || t.kind === 'ley_gate');
     list.sort((a, b) => a.y - b.y); const taken = []; const placedLbl = [];
     for (const t of list) { const ic = await icon(t.kind, KCOL[t.kind] || '#fff', isz); if (!ic) continue; const X = toX(t.x, t.y), Y = toY(t.x, t.y); if (X < MAPX - 30 || X > MAPX + MAPW + 30) continue; const o = own[t.id]; const oc = o && o.owner ? ownerColor(names, o.owner) : null; ctx.drawImage(ic, X - ic.width / 2, Y - ic.height / 2); if (oc) { ctx.beginPath(); ctx.arc(X + isz * 0.45, Y - isz * 0.45, over ? 6 : 11, 0, 7); ctx.fillStyle = oc; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke(); } taken.push([X, Y]);
-        if (!over && ['keep', 'titan'].includes(t.kind)) { ctx.font = '18px Pixeloid, sans-serif'; const tw = ctx.measureText(t.name).width + 8; const bx = X - tw / 2, by = Y + isz * 0.55; if (!placedLbl.some((r) => bx < r[0] + r[2] && bx + tw > r[0] && by < r[1] + r[3] && by + 24 > r[1]) && bx > MAPX && bx + tw < MAPX + MAPW) { placedLbl.push([bx, by, tw, 24]); lbl(ctx, t.name, X, by + 18, 18); } } }
+        if (!over && ['keep', 'titan'].includes(t.kind)) { ctx.font = '18px Cinzel, serif'; const tw = ctx.measureText(t.name).width + 8; const bx = X - tw / 2, by = Y + isz * 0.55; if (!placedLbl.some((r) => bx < r[0] + r[2] && bx + tw > r[0] && by < r[1] + r[3] && by + 24 > r[1]) && bx > MAPX && bx + tw < MAPX + MAPW) { placedLbl.push([bx, by, tw, 24]); lbl(ctx, t.name, X, by + 18, 18); } } }
     // route
     if (R && rp.length > 1) {
         ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const pts = rp.map((q) => [toX(q.x, q.y), toY(q.x, q.y)]);
@@ -149,11 +149,11 @@ async function worldCard(snap, opts = {}) {
     // bottom panel: standings + legend
     const py = MAPY + MAPH + 24; panel(ctx, 12, py, CW - 24, CH - py - 12);
     const gs = (snap.guilds || []).slice(0, over ? 3 : 5); const mx = Math.max(1, ...gs.map((q) => q.score)); ctx.textAlign = 'left'; ctx.font = '28px CinzelD, serif'; ctx.fillStyle = GOLD; ctx.fillText('STANDINGS', 38, py + 46);
-    gs.forEach((q, i) => { const y = py + 76 + i * (over ? 44 : 50); const col = ownerColor(names, q.name); ctx.fillStyle = col; ctx.fillRect(38, y, 30, 30); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(38, y, 30, 30); const s = fitText(ctx, q.name, 250, 26); ctx.font = `${s}px Pixeloid, sans-serif`; ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(q.name, 80, y + 24); ctx.fillStyle = '#2d2438'; ctx.fillRect(330, y + 4, 150, 22); ctx.fillStyle = col; ctx.fillRect(330, y + 4, Math.max(6, 150 * q.score / mx), 22); ctx.textAlign = 'right'; ctx.font = '24px Pixeloid, sans-serif'; ctx.fillStyle = PAPER; ctx.fillText(`${q.score} pts · ${q.tiles}▣`, 700, y + 25); });
+    gs.forEach((q, i) => { const y = py + 76 + i * (over ? 44 : 50); const col = ownerColor(names, q.name); ctx.fillStyle = col; ctx.fillRect(38, y, 30, 30); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(38, y, 30, 30); const s = fitText(ctx, q.name, 250, 26); ctx.font = `${s}px Cinzel, serif`; ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(q.name, 80, y + 24); ctx.fillStyle = '#2d2438'; ctx.fillRect(330, y + 4, 150, 22); ctx.fillStyle = col; ctx.fillRect(330, y + 4, Math.max(6, 150 * q.score / mx), 22); ctx.textAlign = 'right'; ctx.font = '24px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.fillText(`${q.score} pts · ${q.tiles}▣`, 700, y + 25); });
     // legend
     const L = [['keep', 'Guild Keep'], ['fortress', 'Fortress'], ['titan', 'Titan'], ['ruins', 'Ruins'], ['shrine', 'Shrine'], ['ley_gate', 'Ley Gate'], ['gem_vein', 'Vein'], ['village', 'Village']];
-    for (let i = 0; i < L.length; i++) { const col = i % 2, row = Math.floor(i / 2); const X = 722 + col * 160, Y = py + 78 + row * (over ? 42 : 64); const ic = await icon(L[i][0], KCOL[L[i][0]], 36); if (ic) ctx.drawImage(ic, X, Y - 26); ctx.textAlign = 'left'; ctx.font = '19px Pixeloid, sans-serif'; ctx.fillStyle = PAPER; ctx.fillText(L[i][1], X + 46, Y + 2); }
-    ctx.textAlign = 'center'; ctx.font = '22px Pixeloid, sans-serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText('.j cq targets  ·  .j cq territory  ·  .j cq realm', CW / 2, CH - 28);
+    for (let i = 0; i < L.length; i++) { const col = i % 2, row = Math.floor(i / 2); const X = 722 + col * 160, Y = py + 78 + row * (over ? 42 : 64); const ic = await icon(L[i][0], KCOL[L[i][0]], 36); if (ic) ctx.drawImage(ic, X, Y - 26); ctx.textAlign = 'left'; ctx.font = '19px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.fillText(L[i][1], X + 46, Y + 2); }
+    ctx.textAlign = 'center'; ctx.font = '22px Cinzel, serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText('.j cq targets  ·  .j cq territory  ·  .j cq realm', CW / 2, CH - 28);
     return c;
 }
 
@@ -161,6 +161,16 @@ async function worldCard(snap, opts = {}) {
 // ── target cards (image instead of a text list) ───────────────────────────────────────────────
 const CLAIM = { skirmish: 'SKIRMISH', siege: 'SIEGE', ritual: 'RITUAL', treaty: 'TREATY', titan: 'BOSS FIGHT' };
 const CLAIM_COL = { skirmish: '#7ed957', siege: '#ff8a5c', ritual: '#c9a0ff', treaty: '#7df9c4', titan: '#ff4d6d' };
+
+// 🏞️ tile art = the kind's real 3D arena (same engine + pixel/cel shader as the world), cached per kind+biome
+const ATH = new Map();
+async function arenaArt(g, t) {
+    const A = require('./arena'); const biome = (g.realms.find((r) => r.key === t.realm) || {}).biome || 'highlands'; const kind = A.kindToArena(t.kind); const key = kind + '|' + biome + '|' + (t.kind === 'titan' ? t.realm : '');
+    if (ATH.has(key)) return ATH.get(key); if (ATH.size > 40) ATH.delete(ATH.keys().next().value);
+    const en = t.kind === 'titan' ? [{ cq: `golems/titan_${t.realm}.png`, h: 400 }] : [];
+    const { c } = await A.arenaScene({ kind: t.kind, seed: 'thumb:' + key, biome, enemies: en, party: [] }); ATH.set(key, c); return c;
+}
+function cover(ctx, src, x, y, w, h, fy = 0.5, zoom = 1) { const k = Math.max(w / src.width, h / src.height) * zoom; const sw = w / k, sh = h / k; const cy = Math.max(sh / 2, Math.min(src.height - sh / 2, src.height * fy)); ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip(); ctx.imageSmoothingEnabled = true; ctx.drawImage(src, (src.width - sw) / 2, cy - sh / 2, sw, sh, x, y, w, h); ctx.restore(); }
 function thumb(g, data, tileId, w, h) { // pixel-art terrain thumbnail around a tile
     const q = map.parse(tileId); const S = 8; const KK = Math.max(3, Math.round(w / 170)); const iw = Math.floor(w / KK), ih = Math.floor(h / KK); const cw = Math.floor(iw / S), ch = Math.floor(ih / (S * 0.866)); const IW2 = iw, IH2 = ih; const c = createCanvas(IW2, IH2); const x = c.getContext('2d');
     const snap = { seed: data.seed, realm: q.realm, tiles: data.owned || [], guilds: data.guilds || [] }; let y0 = q.y - (ch >> 1); if (y0 & 1) y0--;
@@ -172,27 +182,26 @@ async function targetsCard(data) {
     for (let i = 0; i < Math.min(6, list.length); i++) {
         const t = list[i]; const col = i % COLS, row = Math.floor(i / COLS); const X = pad + col * (cw + pad), Y = 154 + pad + row * (chh + pad); const k = map.KINDS[t.kind] || map.KINDS.plain; const cc = CLAIM_COL[k.claim] || GOLD;
         panel(ctx, X, Y, cw, chh, 20, 'rgba(24,18,34,.96)', cc);
-        const th = thumb(g, data, t.id, cw - 24, chh * 0.5); ctx.save(); ctx.beginPath(); ctx.rect(X + 12, Y + 12, cw - 24, chh * 0.5); ctx.clip(); ctx.imageSmoothingEnabled = false; ctx.drawImage(th.c, 0, 0, th.c.width, th.c.height, X + 12, Y + 12, cw - 24, chh * 0.5); ctx.imageSmoothingEnabled = true;
-        const ic = await icon(t.kind, KCOL[t.kind] || '#fff', 96); if (ic) ctx.drawImage(ic, X + cw / 2 - ic.width / 2, Y + 12 + chh * 0.25 - ic.height / 2); ctx.restore();
+        cover(ctx, await arenaArt(g, g.tiles.get(t.id) || t), X + 12, Y + 12, cw - 24, chh * 0.5, 0.45, 1.75);
         ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.strokeRect(X + 12, Y + 12, cw - 24, chh * 0.5);
         // number badge
-        ctx.beginPath(); ctx.arc(X + 44, Y + 44, 30, 0, 7); ctx.fillStyle = cc; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke(); ctx.font = '38px Pixeloid, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = INK; ctx.fillText(String(t.n), X + 44, Y + 57);
+        ctx.beginPath(); ctx.arc(X + 44, Y + 44, 30, 0, 7); ctx.fillStyle = cc; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.stroke(); ctx.font = '38px Cinzel, serif'; ctx.textAlign = 'center'; ctx.fillStyle = INK; ctx.fillText(String(t.n), X + 44, Y + 57);
         // claim tag
-        ctx.font = '20px Pixeloid, sans-serif'; const tag = CLAIM[k.claim] || 'CLAIM'; const tw = ctx.measureText(tag).width + 20; ctx.fillStyle = cc; ctx.fillRect(X + cw - 12 - tw - 6, Y + 18, tw, 30); ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.fillText(tag, X + cw - 12 - tw / 2 - 6, Y + 40);
+        ctx.font = '20px Cinzel, serif'; const tag = CLAIM[k.claim] || 'CLAIM'; const tw = ctx.measureText(tag).width + 20; ctx.fillStyle = cc; ctx.fillRect(X + cw - 12 - tw - 6, Y + 18, tw, 30); ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.fillText(tag, X + cw - 12 - tw / 2 - 6, Y + 40);
         // name + label
         const ty = Y + 12 + chh * 0.5 + 38; ctx.textAlign = 'left'; const fs = fitText(ctx, t.name, cw - 40, 30, 'CinzelD'); ctx.font = `${fs}px CinzelD, serif`; ctx.fillStyle = PAPER; ctx.fillText(t.name, X + 20, ty);
-        ctx.font = '22px Pixeloid, sans-serif'; ctx.fillStyle = '#b9a9d9'; ctx.fillText(`${k.label}${t.owner ? ' · held by ' + t.owner : ' · unclaimed'}`, X + 20, ty + 32);
+        ctx.font = '22px Cinzel, serif'; ctx.fillStyle = '#b9a9d9'; ctx.fillText(`${k.label}${t.owner ? ' · held by ' + t.owner : ' · unclaimed'}`, X + 20, ty + 32);
         // chips
         const chips = []; if (t.wall) chips.push(['wall', `${t.wall.type}`]); if (t.golems) chips.push(['golem', `×${t.golems}`]); if (t.turrets) chips.push(['turret', `×${t.turrets}`]); if (t.veinLeft) chips.push(['vein', `${t.veinLeft}`]);
-        let cx0 = X + 20; ctx.font = '20px Pixeloid, sans-serif'; for (const [ty2, txt] of chips) { const lab = ({ wall: 'WALL', golem: 'GOLEM', turret: 'TURRET', vein: 'VEIN' })[ty2] + ' ' + txt; ctx.fillStyle = '#2d2438'; const w2 = ctx.measureText(lab).width + 18; ctx.fillRect(cx0, ty + 46, w2, 28); ctx.fillStyle = PAPER; ctx.fillText(lab, cx0 + 9, ty + 67); cx0 += w2 + 8; }
+        let cx0 = X + 20; ctx.font = '20px Cinzel, serif'; for (const [ty2, txt] of chips) { const lab = ({ wall: 'WALL', golem: 'GOLEM', turret: 'TURRET', vein: 'VEIN' })[ty2] + ' ' + txt; ctx.fillStyle = '#2d2438'; const w2 = ctx.measureText(lab).width + 18; ctx.fillRect(cx0, ty + 46, w2, 28); ctx.fillStyle = PAPER; ctx.fillText(lab, cx0 + 9, ty + 67); cx0 += w2 + 8; }
         // distance + threat
-        ctx.textAlign = 'right'; ctx.font = '22px Pixeloid, sans-serif'; ctx.fillStyle = '#ffe066'; ctx.fillText(`${t.dist} tile${t.dist === 1 ? '' : 's'} · ~${t.eta}s`, X + cw - 20, ty + 67 - 24 + 0);
+        ctx.textAlign = 'right'; ctx.font = '22px Cinzel, serif'; ctx.fillStyle = '#ffe066'; ctx.fillText(`${t.dist} tile${t.dist === 1 ? '' : 's'} · ~${t.eta}s`, X + cw - 20, ty + 67 - 24 + 0);
         const thr = Math.max(0, Math.min(1, (t.threat || 0) / Math.max(1, (data.myPower || 1) * 2))); ctx.fillStyle = '#2d2438'; ctx.fillRect(X + 20, Y + chh - 22, cw - 40, 10); ctx.fillStyle = thr < 0.5 ? '#7ed957' : thr < 0.85 ? '#ffd166' : '#ff4d6d'; ctx.fillRect(X + 20, Y + chh - 22, Math.max(6, (cw - 40) * thr), 10);
-        ctx.textAlign = 'left'; ctx.font = '16px Pixeloid, sans-serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText(`danger ⚔️ ~${t.threat || 0}`, X + 20, Y + chh - 28);
+        ctx.textAlign = 'left'; ctx.font = '16px Cinzel, serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText(`danger ⚔️ ~${t.threat || 0}`, X + 20, Y + chh - 28);
         if (t.owner) { const oc = ownerColor(names, t.owner); ctx.beginPath(); ctx.arc(X + cw - 40, Y + chh * 0.5 + 12 - 12, 0, 0, 1); ctx.fillStyle = oc; }
     }
-    if (!list.length) { ctx.textAlign = 'center'; ctx.font = '34px Pixeloid, sans-serif'; ctx.fillStyle = PAPER; ctx.fillText('No border targets yet — claim more ground first!', CW / 2, 600); }
-    ctx.textAlign = 'center'; ctx.font = '22px Pixeloid, sans-serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText(data.pages > 1 ? `.j cq targets ${Math.min(data.pages, data.page + 1)} for more   ·   .j cq tile <#> for details` : '.j cq tile <#> for details  ·  .j cq muster <#> to bring friends', CW / 2, CH - 22);
+    if (!list.length) { ctx.textAlign = 'center'; ctx.font = '34px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.fillText('No border targets yet — claim more ground first!', CW / 2, 600); }
+    ctx.textAlign = 'center'; ctx.font = '22px Cinzel, serif'; ctx.fillStyle = '#8f7fb0'; ctx.fillText(data.pages > 1 ? `.j cq targets ${Math.min(data.pages, data.page + 1)} for more   ·   .j cq tile <#> for details` : '.j cq tile <#> for details  ·  .j cq muster <#> to bring friends', CW / 2, CH - 22);
     return c;
 }
 
@@ -200,21 +209,20 @@ async function targetsCard(data) {
 async function tileCard(data) {
     fonts(); const g = map.generate(data.seed); const t = data.tile; const k = map.KINDS[t.kind] || map.KINDS.plain; const cc = CLAIM_COL[k.claim] || GOLD;
     const { c, ctx } = frame(t.name.toUpperCase(), `${k.label} · ${t.provName || ''}`, CLAIM[k.claim] || '');
-    const th = thumb(g, data, t.id, CW - 24, 520); blit(ctx, th.c, 12, 156, CW - 24, 520);
-    const ic = await icon(t.kind, KCOL[t.kind] || '#fff', 190); if (ic) ctx.drawImage(ic, CW / 2 - ic.width / 2, 156 + 260 - ic.height / 2);
-    const py = 156 + 520 + 28; panel(ctx, 12, py, CW - 24, CH - py - 12, 18, 'rgba(20,16,26,.95)', cc);
-    ctx.textAlign = 'left'; ctx.font = '26px Pixeloid, sans-serif'; const rows = data.rows || []; rows.slice(0, 6).forEach(([a, b], i) => { const y = py + 54 + i * 52; ctx.fillStyle = '#9e8fc4'; ctx.fillText(a, 44, y); ctx.fillStyle = PAPER; ctx.textAlign = 'right'; ctx.fillText(String(b), CW - 44, y); ctx.textAlign = 'left'; ctx.fillStyle = '#2d2438'; ctx.fillRect(44, y + 12, CW - 88, 2); });
-    ctx.textAlign = 'center'; ctx.font = '22px Pixeloid, sans-serif'; ctx.fillStyle = '#ffe066'; ctx.fillText(data.hint || '', CW / 2, CH - 28); return c;
+    cover(ctx, await arenaArt(g, g.tiles.get(t.id) || t), 12, 156, CW - 24, 700, 0.5, 1);
+    const py = 156 + 700 + 24; panel(ctx, 12, py, CW - 24, CH - py - 12, 18, 'rgba(20,16,26,.95)', cc);
+    ctx.textAlign = 'left'; ctx.font = '26px Cinzel, serif'; const rows = data.rows || []; rows.slice(0, 6).forEach(([a, b], i) => { const y = py + 54 + i * 52; ctx.fillStyle = '#9e8fc4'; ctx.fillText(a, 44, y); ctx.fillStyle = PAPER; ctx.textAlign = 'right'; ctx.fillText(String(b), CW - 44, y); ctx.textAlign = 'left'; ctx.fillStyle = '#2d2438'; ctx.fillRect(44, y + 12, CW - 88, 2); });
+    ctx.textAlign = 'center'; ctx.font = '22px Cinzel, serif'; ctx.fillStyle = '#ffe066'; ctx.fillText(data.hint || '', CW / 2, CH - 28); return c;
 }
 
 // ── territory overview card ───────────────────────────────────────────────────────────────────
 async function territoryCard(data) {
     fonts(); const { c, ctx } = frame('TERRITORY', `${data.guild} · ${data.sub || ''}`, data.right || '');
     const stats = data.stats || []; const bw = (CW - 24 - 12 * (Math.min(4, stats.length) - 1)) / Math.min(4, stats.length || 1);
-    for (let i = 0; i < Math.min(8, stats.length); i++) { const col = i % 4, row = Math.floor(i / 4); const X = 12 + col * (bw + 12), Y = 160 + row * 150; panel(ctx, X, Y, bw, 134, 16, 'rgba(24,18,34,.96)', stats[i].col || GOLD); const ic = await icon(stats[i].icon || 'flag', stats[i].col || GOLD, 54); if (ic) ctx.drawImage(ic, X + bw / 2 - ic.width / 2, Y + 8); ctx.textAlign = 'center'; ctx.font = '40px Pixeloid, sans-serif'; ctx.fillStyle = PAPER; ctx.fillText(String(stats[i].v), X + bw / 2, Y + 100); ctx.font = '18px Pixeloid, sans-serif'; ctx.fillStyle = '#9e8fc4'; ctx.fillText(stats[i].k, X + bw / 2, Y + 124); }
+    for (let i = 0; i < Math.min(8, stats.length); i++) { const col = i % 4, row = Math.floor(i / 4); const X = 12 + col * (bw + 12), Y = 160 + row * 150; panel(ctx, X, Y, bw, 134, 16, 'rgba(24,18,34,.96)', stats[i].col || GOLD); const ic = await icon(stats[i].icon || 'flag', stats[i].col || GOLD, 54); if (ic) ctx.drawImage(ic, X + bw / 2 - ic.width / 2, Y + 8); ctx.textAlign = 'center'; ctx.font = '40px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.fillText(String(stats[i].v), X + bw / 2, Y + 100); ctx.font = '18px Cinzel, serif'; ctx.fillStyle = '#9e8fc4'; ctx.fillText(stats[i].k, X + bw / 2, Y + 124); }
     let y = 160 + Math.ceil(Math.min(8, stats.length) / 4) * 150 + 10; panel(ctx, 12, y, CW - 24, CH - y - 12);
     ctx.textAlign = 'left'; ctx.font = '28px CinzelD, serif'; ctx.fillStyle = GOLD; ctx.fillText('YOUR HOLDINGS', 38, y + 46);
-    (data.holdings || []).slice(0, 4).forEach((h, i) => { const yy = y + 70 + i * 62; ctx.fillStyle = '#241b30'; ctx.fillRect(30, yy, CW - 84, 52); ctx.fillStyle = h.warn ? '#ff4d6d' : '#7ed957'; ctx.fillRect(30, yy, 8, 52); ctx.font = '24px Pixeloid, sans-serif'; ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(h.name, 54, yy + 34); ctx.textAlign = 'right'; ctx.fillStyle = h.warn ? '#ff9d9d' : '#b9a9d9'; ctx.fillText(h.note, CW - 56, yy + 34); });
+    (data.holdings || []).slice(0, 4).forEach((h, i) => { const yy = y + 70 + i * 62; ctx.fillStyle = '#241b30'; ctx.fillRect(30, yy, CW - 84, 52); ctx.fillStyle = h.warn ? '#ff4d6d' : '#7ed957'; ctx.fillRect(30, yy, 8, 52); ctx.font = '24px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(h.name, 54, yy + 34); ctx.textAlign = 'right'; ctx.fillStyle = h.warn ? '#ff9d9d' : '#b9a9d9'; ctx.fillText(h.note, CW - 56, yy + 34); });
     if (data.seed) { // realm minimap with everyone's colours
         const g = map.generate(data.seed); const cells = [...g.tiles.values()].filter((t) => t.realm === data.realm); const minx = Math.min(...cells.map((t) => t.x)), maxx = Math.max(...cells.map((t) => t.x)), miny = Math.min(...cells.map((t) => t.y)), maxy = Math.max(...cells.map((t) => t.y));
         const my = y + 70 + 4 * 62 + 8, mh = CH - my - 28, mw = CW - 52; const K2 = 3; const iw = Math.floor(mw / K2), ih = Math.floor(mh / K2); const w = maxx - minx + 3, h = maxy - miny + 3; const S = Math.max(2, Math.min(iw / (w + 1), ih / (h * 0.866))); const sm = createCanvas(iw, ih);
@@ -227,13 +235,11 @@ async function territoryCard(data) {
 async function captureCard(data) {
     fonts(); const g = map.generate(data.seed); const lost = data.mode === 'lost'; const t = data.tile; const k = map.KINDS[t.kind] || map.KINDS.plain; const col = lost ? '#ff4d6d' : '#ffd166';
     const { c, ctx } = frame(lost ? 'TERRITORY LOST' : 'TERRITORY CAPTURED', `${t.name} · ${k.label}`, '');
-    const th = thumb(g, { ...data, owned: data.owned }, t.id, CW - 24, 900); blit(ctx, th.c, 12, 156, CW - 24, 900);
+    cover(ctx, await arenaArt(g, g.tiles.get(t.id) || t), 12, 156, CW - 24, 900, 0.5);
     ctx.fillStyle = lost ? 'rgba(120,10,30,.35)' : 'rgba(255,209,102,.18)'; ctx.fillRect(12, 156, CW - 24, 900);
-    const ic = await icon(t.kind, KCOL[t.kind] || '#fff', 220); if (ic) ctx.drawImage(ic, CW / 2 - ic.width / 2, 156 + 450 - ic.height / 2 - 40);
-    const fl = await icon('flag', data.color || col, 150); if (fl) ctx.drawImage(fl, CW / 2 + 60, 156 + 270);
     ctx.textAlign = 'center'; ctx.font = '84px CinzelD, serif'; ctx.fillStyle = INK; ctx.fillText(lost ? 'LOST' : 'CAPTURED', CW / 2 + 4, 156 + 850 + 4); ctx.fillStyle = col; ctx.fillText(lost ? 'LOST' : 'CAPTURED', CW / 2, 156 + 850);
     const py = 156 + 900 + 24; panel(ctx, 12, py, CW - 24, CH - py - 12, 18, 'rgba(20,16,26,.95)', col);
-    ctx.font = '40px CinzelD, serif'; ctx.fillStyle = PAPER; ctx.fillText(data.headline || '', CW / 2, py + 62); ctx.font = '26px Pixeloid, sans-serif'; ctx.fillStyle = '#cdb98a'; (data.lines || []).slice(0, 4).forEach((l, i) => ctx.fillText(l, CW / 2, py + 108 + i * 36)); return c;
+    ctx.font = '40px CinzelD, serif'; ctx.fillStyle = PAPER; ctx.fillText(data.headline || '', CW / 2, py + 62); ctx.font = '26px Cinzel, serif'; ctx.fillStyle = '#cdb98a'; (data.lines || []).slice(0, 4).forEach((l, i) => ctx.fillText(l, CW / 2, py + 108 + i * 36)); return c;
 }
 
 module.exports = { targetsCard, tileCard, territoryCard, captureCard, worldCard, icon, frame, blit, panel, lbl, fitText, paintWorld, fonts, KCOL, ICONS, OWN, ownerColor, CW, CH, INK, GOLD, PAPER, hash, mix, PAL };
