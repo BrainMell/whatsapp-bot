@@ -7,6 +7,7 @@ async function handleChat(sock, chatId, jid, text, prefix = '.') {
     if (!enabled()) return false; const r = await require('./commands').handle({ jid, text, prefix, eventDoc: null, chatId }); if (!r) return false;
     const inGroup = String(chatId).endsWith('@g.us'); const tag = inGroup ? `@${String(jid).split('@')[0]} ` : ''; const opt = inGroup ? { mentions: [jid] } : {};
     if (r.image) await sock.sendMessage(chatId, { image: r.image, caption: tag + (r.text || ''), ...opt }); else await sock.sendMessage(chatId, { text: tag + (r.text || '…'), ...opt });
+    if (r.video) { try { await sock.sendMessage(chatId, { video: r.video, ptv: true, mimetype: 'video/mp4' }); } catch (e) { console.warn('[conquest] video note failed:', e.message); } }
     return true;
 }
 module.exports.handleChat = handleChat; module.exports.launch = (...a) => require('./launch').launch(...a); module.exports.replacesLegacy = () => require('./launch').replacesLegacy();

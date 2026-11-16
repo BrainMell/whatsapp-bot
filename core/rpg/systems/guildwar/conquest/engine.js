@@ -206,6 +206,7 @@ function titanSlain(state, b, events) { state.titans[b.tileId] = { by: b.attacke
 function claimTile(state, guild, id, now) {
     const o = ov(state, id); const prev = o.owner; const g = state.guilds[guild]; const v = view(state, id);
     if (prev && state.guilds[prev]) state.guilds[prev].tiles = state.guilds[prev].tiles.filter((t) => t !== id);
+    state.prevOwner = state.prevOwner || {}; state.prevOwner[id] = prev || null;
     o.owner = guild; o.claimedAt = now; o.shieldUntil = now + CFG.TILE_SHIELD_SEC * 1000 * tfOf(state); o.wall = null; o.golems = []; o.turrets = []; o.buffs = {}; o.restUntil = 0;
     if (v.vein && o.veinLeft == null) o.veinLeft = v.vein;
     if (!g.tiles.includes(id)) g.tiles.push(id); return o;
@@ -267,4 +268,4 @@ function economy(state, now, events) {
     }
 }
 function standings(state) { return Object.values(state.guilds).map((g) => ({ guild: g.name, tiles: g.tiles.length, score: Math.round(g.score + g.tiles.length * 2 + g.tiles.filter((t) => view(state, t).kind === 'titan').length * 25) })).sort((a, b) => b.score - a.score); }
-module.exports = { newWar, registerPlayer, view, frontier, threat, power, marchSolo, detach, acceptOrder, declineOrder, setAuto, openMuster, joinMuster, launchMuster, recall, teleport, writCost, tick, claimTile, ritualGuess, treatyOffer, fortify, standings, locked, isLeader, roleOf, GLYPHS, validTarget, hasDefence, ov };
+module.exports = { travelSec, newWar, registerPlayer, view, frontier, threat, power, marchSolo, detach, acceptOrder, declineOrder, setAuto, openMuster, joinMuster, launchMuster, recall, teleport, writCost, tick, claimTile, ritualGuess, treatyOffer, fortify, standings, locked, isLeader, roleOf, GLYPHS, validTarget, hasDefence, ov };

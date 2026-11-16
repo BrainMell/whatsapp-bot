@@ -37,10 +37,9 @@ async function envCardInProcess(cardId, biome) {
 
 
 // ── realm war map (3D hex scene) ──────────────────────────────────────────────────────────────
-async function mapInProcess(snap) {   // JPEG + capped width: a 2750px PNG is >1MB; chat doesn't need it
-    let c = await require('./scene3d').warMapScene(snap); const MAXW = 1900;
-    if (c.width > MAXW) { const { createCanvas } = require('canvas'); const k = MAXW / c.width; const o = createCanvas(MAXW, Math.round(c.height * k)); const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, o.width, o.height); c = o; }
-    return c.toBuffer('image/jpeg', { quality: 0.9 });
+async function mapInProcess(snap) {   // v2: big 4:5 painted-pixel card (cards.js); old 3D hex scene stays available via CONQUEST_MAP=hex
+    if (process.env.CONQUEST_MAP === 'hex') { let c = await require('./scene3d').warMapScene(snap); const MAXW = 1900; if (c.width > MAXW) { const { createCanvas } = require('canvas'); const k = MAXW / c.width; const o = createCanvas(MAXW, Math.round(c.height * k)); const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, o.width, o.height); c = o; } return c.toBuffer('image/jpeg', { quality: 0.9 }); }
+    return (await require('./cards').worldCard(snap)).toBuffer('image/jpeg', { quality: 0.92 });
 }
 
 // ── child pool (renderWorker.js type 'conquest') ──────────────────────────────────────────────
@@ -51,7 +50,10 @@ function getChild() { if (child && child.connected) return child; try { const rq
     child.on('exit', () => { child = null; for (const [id, w] of waiting) { waiting.delete(id); clearTimeout(w.t); w.rej(new Error('render child exited')); } }); return child; }
 function viaChild(what, data) { return new Promise((res, rej) => { const ch = getChild(); if (!ch) return rej(new Error('no render slot')); const id = ++seq; const t = setTimeout(() => { waiting.delete(id); rej(new Error('render timeout')); }, 40000); waiting.set(id, { res, rej, t }); ch.send({ type: 'conquest', id, what, data }); }); }
 const safe = async (what, data, inproc) => { try { return await viaChild(what, data); } catch (e) { if (process.env.CONQUEST_RENDER_INPROC === '1') return inproc(data); console.warn('[conquest] render', what, e.message); return null; } };
+async function cardInProcess(what, data) { const C = require('./cards'); const cv = what === 'targets' ? await C.targetsCard(data) : what === 'tile' ? await C.tileCard(data) : what === 'territory' ? await C.territoryCard(data) : await C.captureCard(data); return cv.toBuffer('image/jpeg', { quality: 0.92 }); }
+async function videoInProcess(data) { return require('./travelVideo').travelVideo(data); }
 module.exports = {
+    videoInProcess, renderVideo: (d) => safe('video', d, videoInProcess), cardInProcess, renderCard: (what, data) => safe(what, data, (d) => cardInProcess(what, d)),
     siegeInProcess, envCardInProcess, mapInProcess,
     renderSiege: (b) => safe('siege', b, siegeInProcess), renderEnvCard: (id) => safe('card', { id }, (d) => envCardInProcess(d.id)), renderMap: (snap) => safe('map', snap, mapInProcess),
 };

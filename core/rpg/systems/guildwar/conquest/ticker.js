@@ -3,7 +3,7 @@
 const store = require('./store'); const E = require('./engine'); const breach = require('./breach'); const envCards = require('./envCards'); const { enabled } = require('./config');
 async function tickWar(ev, sock) {
     if (!enabled() || !ev || !ev.eventId || !sock) return;
-    let ended = false; const sends = []; const imgs = []; const arrivals = []; const chatMap = {}; let hostGroup = null; const gcLines = [];
+    let ended = false; const sends = []; const imgs = []; const arrivals = []; const chatMap = {}; let hostGroup = null; const gcLines = []; const caps = []; const map = require('./mapgen');
     await store.mutate(ev.eventId, (s) => {
         if (s.status !== 'active') return;
         hostGroup = s.hostGroup || null; for (const p of Object.values(s.players)) if (p.chat) chatMap[p.jid] = p.chat;
@@ -16,7 +16,11 @@ async function tickWar(ev, sock) {
             else if (e.type === 'march_soon') { for (const j of e.members) sends.push([j, require('./travel').soonText(s, e)]); }
             else if (e.type === 'march_half') { const mm = s.marches[e.id]; for (const j of e.members) sends.push([j, require('./travel').halfText(s, e, mm ? Math.max(0, Math.round((mm.arrive - Date.now()) / 1000)) : 0)]); }
             else if (e.type === 'arrived') { for (const j of e.members) { const p = s.players[j]; if (!p) continue; try { const cq = require('./commands'); const d = cq.mapSnap(s, e.guild, j); d.route = require('./travel').routeOf(s, { id: 'arr', guild: e.guild, from: e.from, to: e.tile, path: e.path, dist: e.dist, type: e.mtype, depart: e.depart, arrive: e.arriveAt, members: e.members }, 'arrive', Date.now(), j); arrivals.push([j, d, E.view(s, e.tile).name]); } catch (er) { /* card is optional */ } } }
-            else if (e.type === 'claimed') { const t = `🚩 *${E.view(s, e.tile).name}* now flies the *${e.guild}* banner!`; if (hostGroup) gcLines.push(t); else for (const j of guildMembers(e.guild)) sends.push([j, t]); }
+            else if (e.type === 'claimed') { const vv = E.view(s, e.tile); const prev = (s.prevOwner || {})[e.tile]; const t = `🚩 *${vv.name}* now flies the *${e.guild}* banner!${prev ? ` (taken from ${prev})` : ''}`; if (hostGroup) gcLines.push(t); else for (const j of guildMembers(e.guild)) sends.push([j, t]);
+                const gi = Object.keys(s.guilds).indexOf(e.guild); const col = ['#3a86ff', '#ef476f', '#06d6a0', '#ffd166', '#9b5de5', '#fb8500', '#adb5bd', '#c08457'][Math.max(0, gi) % 8]; const realm = map.parse(e.tile).realm; const owned = Object.entries(s.overlays).filter(([id]) => id.startsWith(realm + ':')).map(([id, o]) => ({ id, owner: o.owner || null })); const gl = Object.values(s.guilds).map((q) => ({ name: q.name }));
+                const base = { seed: s.seed, realm, owned, guilds: gl, tile: { id: e.tile, name: vv.name, kind: vv.kind } };
+                caps.push([hostGroup || null, guildMembers(e.guild), { ...base, mode: 'won', color: col, headline: `${e.guild} takes ${vv.name}`, lines: [`${(map.KINDS[vv.kind] || {}).label}${prev ? ' · wrested from ' + prev : ' · claimed from the wild'}`, `+${(map.KINDS[vv.kind] || {}).gp || 1} score per hour · shielded for a short while`] }]);
+                if (prev) caps.push([null, guildMembers(prev), { ...base, mode: 'lost', headline: `${vv.name} has fallen`, lines: [`${e.guild} now holds the banner.`, 'Muster your guild and take it back: .j cq targets'] }]); }
             else if (e.type === 'repelled') { for (const j of guildMembers(e.guild)) sends.push([j, `🛡️ The assault on *${E.view(s, e.tile).name}* was repelled.`]); if (e.defender) for (const j of guildMembers(e.defender)) sends.push([j, `🛡️ Your garrison at *${E.view(s, e.tile).name}* held against ${e.guild}!`]); }
             else if (e.type === 'titan_slain') { const t = `☠️ *TITAN SLAIN* at ${E.view(s, e.tile).name} by *${e.guild}*! +4 writs, +120 supplies, +200 gems to their treasury.`; if (hostGroup) gcLines.push(t); else for (const j of guildMembers(e.guild)) sends.push([j, t]); }
             else if (e.type === 'ritual_start') { const en = s.encounters[e.id]; if (en) for (const j of en.members) sends.push([j, `🏛️ *${en.tileName}* — an ancient rite blocks the way. Arrange 4 glyphs: ${E.GLYPHS.join(' ')}\n\`cq ritual ☀ ☾ ✦ ❄\` (${en.tries} tries; 🟢 exact / ⚪ misplaced hints).`]); }
@@ -25,7 +29,8 @@ async function tickWar(ev, sock) {
         }
     });
     if (ended) { try { await require('../state').endEvent(ev.eventId, 'Conquest concluded', { quietFeed: true }); } catch (e) { /* already ended */ } }
-    const rr = (imgs.length || arrivals.length) ? require('./render') : null;
+    const rr = (imgs.length || arrivals.length || caps.length) ? require('./render') : null;
+    for (const [grp, jids, data] of caps) { try { const img = await rr.renderCard('capture', data); if (!img) continue; const caption = data.mode === 'lost' ? `🏴 *${data.tile.name} LOST* — ${data.lines[0]}` : `🚩 *${data.tile.name} CAPTURED*`; const dests = grp && data.mode === 'won' ? [grp] : [...new Set(jids.map((j) => chatMap[j] || j))]; for (const d of dests) await sock.sendMessage(d, { image: img, caption }); } catch (er) { /* card is a bonus */ } }
     const to = (jid) => chatMap[jid] || jid; const mention = (jid) => (to(jid).endsWith('@g.us') ? { mentions: [jid] } : {}); const tag = (jid, t) => (to(jid).endsWith('@g.us') ? `@${String(jid).split('@')[0]} ${t}` : t);
     for (const [jid, d, nm] of arrivals) { const img = await rr.renderMap(d); if (img) { try { await sock.sendMessage(to(jid), { image: img, caption: tag(jid, `📍 Arrived at ${nm}`), ...mention(jid) }); } catch (er) { /* unreachable */ } } }
     for (const [jids, b] of imgs) { const img = await rr.renderSiege(b); if (img) for (const j of new Set(jids.map(to))) { try { await sock.sendMessage(j, { image: img, caption: `🧱 ${b.tileName} — round ${b.round}` }); } catch (e) { /* unreachable */ } } }
