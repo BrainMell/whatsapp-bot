@@ -7,13 +7,15 @@ const env = require('./envCards');
 const { mulberry32, hashStr } = require('./mapgen');
 
 const WALL_ACTIONS = ['ram', 'ladder', 'sapper', 'fire', 'rune', 'shield', 'scout'];
-const GOLEM_ACTIONS = ['strike', 'guard', 'shatter', 'lure', 'rally'];
+const GOLEM_ACTIONS = ['strike', 'guard', 'shatter', 'lure', 'rally', 'ult'];
+const ULT_NEED = 3; // rounds of charge before an ultimate is ready
 const SECTIONS = ['gate', 'towerL', 'towerR', 'curtain'];
 const SHARE = { gate: 0.4, towerL: 0.2, towerR: 0.2, curtain: 0.2 };
 const ACTION_HELP = {
     ram: 'smash the gate (wood ×1.3, runed ×0.7)', ladder: 'scale towers/curtain, exposed to fire',
     sapper: 'tunnel under a section, blows in 2 rounds (×3)', fire: 'burn a section 3 rounds (great vs wood, weak vs stone)',
     rune: 'arcane breaking: ignores wall type, strips wards', shield: 'cover the party: turret/hazard damage ×0.4', scout: 'mark a weak point: +40% dmg there next round',
+    ult: 'ULTIMATE (charges 3 rounds): your signature skill hits every guardian',
     strike: 'hit a golem', guard: 'brace: golem damage on you ×0.4', shatter: 'crack the core: ×1.6 vs clay/stone, ×0.5 vs rune', lure: 'draw the golems\' attacks onto you (they hit ×0.7)', rally: 'heal the party 6% max HP',
 };
 const baseDmg = (p) => 12 + 6 * Math.sqrt(Math.max(0, p));
@@ -33,7 +35,7 @@ function create({ id, tileId, biome, tileName, attacker, defender, party, defenc
         golems: (defence.golems || []).map((g, i) => { const base = CFG.GOLEM_BASE[g.kind] || CFG.GOLEM_BASE.clay; const lv = 1 + 0.3 * ((g.lvl || 1) - 1); const hp = Math.round(base.hp * lv * (1 + (buffs.hp || 0))); return { id: 'g' + i, kind: g.kind, lvl: g.lvl || 1, hp, max: hp, atk: Math.round(base.atk * lv * (1 + (buffs.atk || 0))) }; }),
         outcome: null, entry: null, climbed: false, log: [], isTitan: !!isTitan,
     };
-    for (const p of party) { const mx = maxHpFor(p.power); b.party[p.jid] = { jid: p.jid, name: p.name || p.jid.split('@')[0], power: p.power, sprite: p.sprite || null, hp: mx, max: mx, action: null, target: null, lastAction: null }; }
+    for (const p of party) { const mx = maxHpFor(p.power); b.party[p.jid] = { jid: p.jid, name: p.name || p.jid.split('@')[0], power: p.power, sprite: p.sprite || null, hp: mx, max: mx, action: null, target: null, lastAction: null, ult: 0 }; }
     if (b.phase === 'golems' && !b.golems.length) { b.phase = 'won'; b.outcome = 'won'; }
     return b;
 }
@@ -61,6 +63,7 @@ function submit(b, jid, action, target) {
     action = String(action || '').toLowerCase();
     const valid = b.phase === 'wall' ? WALL_ACTIONS : GOLEM_ACTIONS;
     if (!valid.includes(action)) return { ok: false, msg: `Options now: ${valid.join(', ')}.` };
+    if (action === 'ult' && (m.ult || 0) < ULT_NEED) return { ok: false, msg: `⚡ Ultimate charging ${m.ult || 0}/${ULT_NEED} — hold on.` };
     let tgt = target ? String(target).toLowerCase() : null;
     if (b.phase === 'wall') {
         if (['ram', 'ladder', 'sapper', 'fire', 'rune', 'scout'].includes(action)) {
@@ -154,22 +157,24 @@ function resolveRound(b) {
         else if (b.sections.curtain && b.sections.curtain.hp <= 0 && b.climbed) { b.phase = 'golems'; b.entry = 'escalade'; for (const m of alive(b)) m.hp = Math.round(m.hp * 0.9); lines.push('🪜 *ESCALADE!* You pour over the broken curtain wall (-10% HP) — the golems turn to meet you.'); }
         if (b.phase === 'golems' && !b.golems.some((g) => g.hp > 0)) { b.phase = 'won'; b.outcome = 'won'; }
     } else if (b.phase === 'golems') {
-        const live = b.golems.filter((g) => g.hp > 0);
+        const live = b.golems.filter((g) => g.hp > 0); b.fx = []; b.enemyFx = [];
         for (const m of party) {
+            if (m.action === 'ult' && (m.ult || 0) >= ULT_NEED) { let tot = 0; for (const g of b.golems.filter((x) => x.hp > 0)) { const d = Math.round(baseDmg(m.power) * 1.9 * (b.isTitan ? 0.8 : 1) * (0.9 + rng() * 0.2)); g.hp = Math.max(0, g.hp - d); tot += d; } m.ult = -1; b.fx.push({ jid: m.jid, name: m.name, action: 'ult', all: true, dmg: tot }); lines.push(`⚡ *${m.name} unleashes an ULTIMATE!* -${tot} across all guardians`); continue; }
             const gidx = (id) => b.golems.find((g) => g.id === id && g.hp > 0) || b.golems.find((g) => g.hp > 0);
             if (m.action === 'strike' || m.action === 'shatter') {
                 const g = gidx(m.target); if (!g) continue; let d = baseDmg(m.power) * (0.85 + rng() * 0.3);
                 if (m.action === 'shatter') d *= g.kind === 'rune' ? 0.5 : (g.kind === 'clay' || g.kind === 'stone') ? 1.6 : 1.1 * (card.mods.rune || 1);
                 else d *= g.kind === 'iron' ? 0.8 : 1;
-                d = Math.round(d); g.hp = Math.max(0, g.hp - d); lines.push(`${m.action === 'shatter' ? '🔨' : '⚔️'} ${m.name} → ${g.kind} golem -${d}${g.hp === 0 ? ' 🗿 SHATTERED' : ''}`);
-            } else if (m.action === 'rally') { const h = Math.round(m.max * 0.06 * 1); for (const o of alive(b)) o.hp = Math.min(o.max, o.hp + h); lines.push(`💚 ${m.name} rallies the party (+${h} each)`); }
+                d = Math.round(d); g.hp = Math.max(0, g.hp - d); b.fx.push({ jid: m.jid, name: m.name, action: m.action, gid: g.id, dmg: d }); lines.push(`${m.action === 'shatter' ? '🔨' : '⚔️'} ${m.name} → ${g.kind} golem -${d}${g.hp === 0 ? ' 🗿 SHATTERED' : ''}`);
+            } else if (m.action === 'rally') { b.fx.push({ jid: m.jid, name: m.name, action: 'rally' }); const h = Math.round(m.max * 0.06 * 1); for (const o of alive(b)) o.hp = Math.min(o.max, o.hp + h); lines.push(`💚 ${m.name} rallies the party (+${h} each)`); }
         }
         const lurers = alive(b).filter((m) => m.action === 'lure');
         const surge = (card.golem || 1) * (b.status.golemSurge > 0 ? 1.35 : 1);
         for (const g of b.golems.filter((x) => x.hp > 0)) {
             const pool = lurers.length ? lurers : alive(b); if (!pool.length) break; const m = pool[Math.floor(rng2() * pool.length)];
-            dmgToParty(m, g.atk * 3 * surge * (lurers.length ? 0.7 : 1) * (0.9 + rng2() * 0.2), `🗿 ${g.kind} golem hits`);
+            b.enemyFx.push({ gid: g.id, jid: m.jid, ult: b.isTitan && b.round % 3 === 0 }); dmgToParty(m, g.atk * 3 * surge * (lurers.length ? 0.7 : 1) * (0.9 + rng2() * 0.2), `🗿 ${g.kind} golem hits`);
         }
+        for (const m of alive(b)) m.ult = Math.min(ULT_NEED, (m.ult || 0) + 1);
         if (!b.golems.some((g) => g.hp > 0)) { b.phase = 'won'; b.outcome = 'won'; lines.push('🏆 *The last golem crumbles.*'); }
     }
     // turrets (not on the round the wall phase just ended into golem phase? they still fire)

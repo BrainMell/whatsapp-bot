@@ -16,7 +16,7 @@ const PRESETS = {
     // default for the realm map / siege / encounters
     aldafold: { outline: { px: 1.9, color: INK }, posterize: { levels: 7, mix: 0.45 }, grade: { contrast: 1.06, sat: 1.04, warm: 0.02 }, shadeBand: { below: 0.34, dark: 0.18 }, edge: { thick: 1, thresh: 0.42, color: INK, strength: 0.45 }, pixel: 0 },
     // lighter touch (large overview maps where objects are tiny)
-    overview: { outline: { px: 1.2, color: INK }, posterize: { levels: 8, mix: 0.35 }, grade: { contrast: 1.05, sat: 1.1, warm: 0 }, shadeBand: null, edge: null, pixel: 0 },
+    overview: { outline: { px: 1.2, color: INK }, posterize: { levels: 8, mix: 0.35 }, grade: { contrast: 1.06, sat: 0.9, warm: 0, leaf: 0.4 }, shadeBand: null, edge: null, pixel: 0 },
     // chunky pixel identity (opt-in)
     // conquest: real 3D hex world + pixel shader over the environment (chunky 3px pixels, palette-posterised, ink edges)
     conquest: { outline: { px: 3, color: INK }, posterize: { levels: 7, mix: 0.5 }, grade: { contrast: 1.08, sat: 0.8, warm: 0.0, leaf: 0.4, cel: 5, celMix: 0.9 }, shadeBand: { below: 0.34, dark: 0.16 }, edge: { thick: 1, thresh: 0.5, color: INK, strength: 0.4 }, pixel: 3 },

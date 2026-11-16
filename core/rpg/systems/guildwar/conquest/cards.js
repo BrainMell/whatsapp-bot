@@ -223,10 +223,9 @@ async function territoryCard(data) {
     let y = 160 + Math.ceil(Math.min(8, stats.length) / 4) * 150 + 10; panel(ctx, 12, y, CW - 24, CH - y - 12);
     ctx.textAlign = 'left'; ctx.font = '28px CinzelD, serif'; ctx.fillStyle = GOLD; ctx.fillText('YOUR HOLDINGS', 38, y + 46);
     (data.holdings || []).slice(0, 4).forEach((h, i) => { const yy = y + 70 + i * 62; ctx.fillStyle = '#241b30'; ctx.fillRect(30, yy, CW - 84, 52); ctx.fillStyle = h.warn ? '#ff4d6d' : '#7ed957'; ctx.fillRect(30, yy, 8, 52); ctx.font = '24px Cinzel, serif'; ctx.fillStyle = PAPER; ctx.textAlign = 'left'; ctx.fillText(h.name, 54, yy + 34); ctx.textAlign = 'right'; ctx.fillStyle = h.warn ? '#ff9d9d' : '#b9a9d9'; ctx.fillText(h.note, CW - 56, yy + 34); });
-    if (data.seed) { // realm minimap with everyone's colours
-        const g = map.generate(data.seed); const cells = [...g.tiles.values()].filter((t) => t.realm === data.realm); const minx = Math.min(...cells.map((t) => t.x)), maxx = Math.max(...cells.map((t) => t.x)), miny = Math.min(...cells.map((t) => t.y)), maxy = Math.max(...cells.map((t) => t.y));
-        const my = y + 70 + 4 * 62 + 8, mh = CH - my - 28, mw = CW - 52; const K2 = 3; const iw = Math.floor(mw / K2), ih = Math.floor(mh / K2); const w = maxx - minx + 3, h = maxy - miny + 3; const S = Math.max(2, Math.min(iw / (w + 1), ih / (h * 0.866))); const sm = createCanvas(iw, ih);
-        paintWorld(sm.getContext('2d'), g, { seed: data.seed, realm: data.realm, tiles: data.owned || [], guilds: data.guilds || [] }, minx - 1, miny - 1, w, h, S, iw, ih, {}); ctx.imageSmoothingEnabled = false; ctx.drawImage(sm, 0, 0, iw, ih, 26, my, iw * K2, ih * K2); ctx.imageSmoothingEnabled = true; ctx.lineWidth = 4; ctx.strokeStyle = INK; ctx.strokeRect(26, my, iw * K2, ih * K2);
+    if (data.seed) { // realm overview = the 3D hex world + shader, same as the realm card
+        const my = y + 70 + 4 * 62 + 8, mh = CH - my - 20, mw = CW - 52;
+        try { const g0 = map.generate(data.seed); const kp = [...g0.tiles.values()].find((t) => t.realm === data.realm && t.kind === 'keep') || [...g0.tiles.values()].find((t) => t.realm === data.realm); const sc = await require('./scene3d').warMapScene({ me: { at: kp.id }, seed: data.seed, realm: data.realm, tiles: data.owned || [], guilds: data.guilds || [], view: 'overview', portrait: true, bare: true }); cover(ctx, sc, 26, my, mw, mh, 0.5, 1); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(201,168,90,.7)'; ctx.strokeRect(26, my, mw, mh); } catch (e) { /* minimap is garnish */ }
     }
     return c;
 }
@@ -242,4 +241,5 @@ async function captureCard(data) {
     ctx.font = '40px CinzelD, serif'; ctx.fillStyle = PAPER; ctx.fillText(data.headline || '', CW / 2, py + 62); ctx.font = '26px Cinzel, serif'; ctx.fillStyle = '#cdb98a'; (data.lines || []).slice(0, 4).forEach((l, i) => ctx.fillText(l, CW / 2, py + 108 + i * 36)); return c;
 }
 
-module.exports = { targetsCard, tileCard, territoryCard, captureCard, worldCard, icon, frame, blit, panel, lbl, fitText, paintWorld, fonts, KCOL, ICONS, OWN, ownerColor, CW, CH, INK, GOLD, PAPER, hash, mix, PAL };
+async function warm(seed) { try { const g = map.generate(seed); const seen = new Set(); for (const t of g.tiles.values()) { const k = t.kind + '|' + t.realm; if (seen.has(k) || seen.size > 40) continue; seen.add(k); await arenaArt(g, t); } } catch (e) { /* warm-up is best effort */ } }
+module.exports = { warm, targetsCard, tileCard, territoryCard, captureCard, worldCard, icon, frame, blit, panel, lbl, fitText, paintWorld, fonts, KCOL, ICONS, OWN, ownerColor, CW, CH, INK, GOLD, PAPER, hash, mix, PAL };

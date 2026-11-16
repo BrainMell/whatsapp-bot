@@ -102,7 +102,7 @@ async function arenaScene(o) {
     // sprites standing in the arena
     const SPR = { enemies: [], party: [] };
     const en = o.enemies || []; const cx0 = W / 2; const baseY = H * 0.5;
-    for (const [i, e] of en.entries()) { const im = e.cq ? await SP.cq(e.cq).catch(() => null) : e.asset ? await SP.asset(e.asset).catch(() => null) : e.character ? await SP.character(/\.png$/.test(e.character) ? e.character : e.character + '.png').catch(() => null) : null; if (!im) continue; const x = cx0 + (i - (en.length - 1) / 2) * (e.gap || 210) - (e.big ? 0 : 0); const y = baseY - (e.big ? 20 : 0) + (i % 2) * 30; const h = (e.h || 260) * 0.55; castShadow(ctx, im, 'en' + (e.cq || e.asset || e.character) + i, x, y, h, { flip: e.flip !== false }); SP.standing(ctx, im, 'en' + (e.cq || e.asset || e.character) + i, x, y, h, { flip: e.flip !== false, glow: e.glow || null, shadow: false }); SPR.enemies.push({ x, y, h, e }); }
+    for (const [i, e] of en.entries()) { const im = e.cq ? await (e.attacking ? SP.cq(e.cq.replace(/\.png$/, '_atk.png')).catch(() => null) : Promise.resolve(null)).then((a) => a || SP.cq(e.cq)).catch(() => null) : e.asset ? await SP.asset(e.asset).catch(() => null) : e.character ? await SP.character(/\.png$/.test(e.character) ? e.character : e.character + '.png').catch(() => null) : null; if (!im) continue; const x = cx0 + (i - (en.length - 1) / 2) * (e.gap || 210) + (e.attacking ? -18 : 0); const y = baseY - (e.big ? 20 : 0) + (i % 2) * 30 + (e.attacking ? 34 : 0); const h = (e.h || 260) * 0.55 * (e.attacking ? 1.1 : 1); castShadow(ctx, im, 'en' + (e.cq || e.asset || e.character) + i, x, y, h, { flip: e.flip !== false }); SP.standing(ctx, im, 'en' + (e.cq || e.asset || e.character) + i, x, y, h, { flip: e.flip !== false, glow: e.glow || null, shadow: false }); SPR.enemies.push({ x, y, h, e }); }
     const pm = o.party || []; const per = Math.min(5, Math.max(1, pm.length)); const rows = Math.ceil(pm.length / 5);
     for (const [i, m] of pm.entries()) { const row = Math.floor(i / 5), ci = i % 5; const inRow = Math.min(5, pm.length - row * 5); const x = W / 2 + (ci - (inRow - 1) / 2) * 96 + (row % 2) * 30; const y = H * 0.64 + row * 46 + (ci % 2) * 16; const im = m.sprite ? await SP.character(/\.png$/.test(m.sprite) ? m.sprite : m.sprite + '.png').catch(() => null) : null; if (im) { castShadow(ctx, im, 'pm' + m.sprite, x, y, 92, { alpha: m.hp === 0 ? 0.3 : 1 }); SP.standing(ctx, im, 'pm' + m.sprite, x, y, 92, { smooth: true, shadow: false, alpha: m.hp === 0 ? 0.3 : 1 }); } SPR.party.push({ x, y, m }); }
     // shadows are baked in before the shader so sprites and world get the same pixelation/palette
@@ -115,16 +115,33 @@ async function arenaScene(o) {
     return { c, ctx, SPR };
 }
 
+
+// ✨ round FX: the SAME static VFX library the main combat uses (skillStaticFx) — basics, skills and ultimates land on the sprites
+const ULT_NAMES = ['Annihilation', 'Meteor Strike', 'Holy Judgment', 'Thunderfall', 'Frost Nova', 'Shadow Eclipse', 'Inferno Burst', 'Venom Storm'];
+const TITAN_ULT = { frostreach: 'Frost Breath', wildwood: 'Earthshatter', emberfields: 'Inferno Burst', sunscorch: 'Holy Judgment', stormreach: 'Thunderfall' };
+function paintRoundFx(ctx, o, SPR) {
+    let F; try { F = require('../../combat/skillStaticFx'); } catch (e) { return; } const bs = (x, y, h, act, dir) => { try { const sc = h / 110; if (act.ult || act.skillName) { if (F.paintSkillFx(ctx, act, x, y - h * 0.5, h, dir, sc, !!act.crit)) return; } F.paintBasic(ctx, act, x, y - h * 0.5, h, dir, sc, false); } catch (e) { /* fx are garnish */ } };
+    const en = (gid) => SPR.enemies.find((q) => q.e.gid === gid) || SPR.enemies[0]; const pm = (jid) => SPR.party.find((q) => q.m.jid === jid);
+    for (const f of o.fx || []) {
+        const who = pm(f.jid);
+        if (f.action === 'ult') { const nm = ULT_NAMES[[...f.name].reduce((a, ch) => a + ch.charCodeAt(0), 0) % ULT_NAMES.length]; for (const q of SPR.enemies) bs(q.x, q.y, q.h * 0.8, { skillName: nm, ult: true, actorName: f.name, attackSeed: 'u' + o.seed }, 1); if (who) { ctx.save(); ctx.globalAlpha = 0.5; const g = ctx.createRadialGradient(who.x, who.y - 50, 5, who.x, who.y - 50, 120); g.addColorStop(0, 'rgba(255,240,170,.9)'); g.addColorStop(1, 'rgba(255,200,80,0)'); ctx.fillStyle = g; ctx.fillRect(who.x - 130, who.y - 180, 260, 260); ctx.restore(); } }
+        else if (f.action === 'shatter') { const q = en(f.gid); if (q) bs(q.x, q.y, q.h, { skillName: 'Crushing Blow', actorName: f.name, attackSeed: f.dmg }, 1); }
+        else if (f.action === 'strike') { const q = en(f.gid); if (q) bs(q.x, q.y, q.h, { actorName: f.name, attackSeed: f.dmg, skillName: 'attack' }, 1); }
+        else if (f.action === 'rally' && who) bs(who.x, who.y, 120, { skillName: 'Rally Cry', effectKind: 'buff', actorName: f.name }, 1);
+    }
+    for (const f of o.enemyFx || []) { const t = pm(f.jid); const e = en(f.gid); if (!t) continue; if (f.ult) { const nm = TITAN_ULT[o.realm] || 'Annihilation'; for (const q of SPR.party) bs(q.x, q.y, 130, { skillName: nm, ult: true, actorName: 'titan', attackSeed: 'e' + o.seed }, -1); } else bs(t.x, t.y, 120, { actorName: (e && e.e.name) || 'monster', attackSeed: f.gid + f.jid, skillName: 'attack' }, -1); }
+}
+
 // HUD frame for an arena: slim title band on top, status band at the bottom. Restrained: serif type, thin rules.
 async function arenaCard(o) {
-    const { c, ctx, SPR } = await arenaScene(o); const L = (s, x, y, size, col, al = 'left', fam = 'IMFell, Cinzel, serif') => { ctx.font = `${size}px ${fam}`; ctx.textAlign = al; ctx.fillStyle = col; ctx.fillText(s, x, y); };
+    const { c, ctx, SPR } = await arenaScene(o); paintRoundFx(ctx, o, SPR); const L = (s, x, y, size, col, al = 'left', fam = 'IMFell, Cinzel, serif') => { ctx.font = `${size}px ${fam}`; ctx.textAlign = al; ctx.fillStyle = col; ctx.fillText(s, x, y); };
     require('./cards').fonts();
     const gt = ctx.createLinearGradient(0, 0, 0, 170); gt.addColorStop(0, 'rgba(8,6,10,.92)'); gt.addColorStop(1, 'rgba(8,6,10,0)'); ctx.fillStyle = gt; ctx.fillRect(0, 0, W, 170);
     L(String(o.title || '').toUpperCase(), 40, 78, 54, '#e8d9a8', 'left', 'CinzelD, Cinzel, serif'); L(o.sub || '', 42, 116, 27, '#bfae84');
     if (o.right) L(o.right, W - 40, 70, 28, '#e0a070', 'right');
     // enemy plates
     for (const s of SPR.enemies) { const e = s.e; if (e.hp == null) continue; const bw = 200; const x = s.x - bw / 2, y = s.y + 18; ctx.fillStyle = 'rgba(8,6,10,.75)'; ctx.fillRect(x - 6, y - 4, bw + 12, 44); L(e.name || '', s.x, y + 14, 20, '#e8d9a8', 'center'); ctx.fillStyle = '#2a1e1e'; ctx.fillRect(x, y + 22, bw, 9); ctx.fillStyle = '#b8403a'; ctx.fillRect(x, y + 22, bw * Math.max(0, e.hp / e.max), 9); }
-    for (const s of SPR.party) { const m = s.m; if (m.hp == null) continue; const bw = 96; const x = s.x - bw / 2, y = s.y + 8; L(m.name.slice(0, 12), s.x, y + 14, 19, '#efe3c0', 'center'); ctx.fillStyle = '#1e2a1e'; ctx.fillRect(x, y + 20, bw, 7); ctx.fillStyle = '#5fae5a'; ctx.fillRect(x, y + 20, bw * Math.max(0, m.hp / m.max), 7); if (m.tag) L(m.tag, s.x, s.y - 104, 17, '#9ed89a', 'center'); }
+    for (const s of SPR.party) { const m = s.m; if (m.hp == null) continue; const bw = 96; const x = s.x - bw / 2, y = s.y + 8; L(m.name.slice(0, 12), s.x, y + 14, 19, '#efe3c0', 'center'); ctx.fillStyle = '#1e2a1e'; ctx.fillRect(x, y + 20, bw, 7); ctx.fillStyle = '#5fae5a'; ctx.fillRect(x, y + 20, bw * Math.max(0, m.hp / m.max), 7); if (m.tag) L(m.tag, s.x, y + 44, 17, m.tag.includes('READY') ? '#ffd966' : '#9ed89a', 'center'); }
     // bottom band
     const gb = ctx.createLinearGradient(0, H - 250, 0, H); gb.addColorStop(0, 'rgba(8,6,10,0)'); gb.addColorStop(0.35, 'rgba(8,6,10,.88)'); gb.addColorStop(1, 'rgba(8,6,10,.96)'); ctx.fillStyle = gb; ctx.fillRect(0, H - 250, W, 250);
     ctx.strokeStyle = 'rgba(201,168,90,.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(40, H - 176); ctx.lineTo(W - 40, H - 176); ctx.stroke();

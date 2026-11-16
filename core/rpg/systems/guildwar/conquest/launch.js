@@ -32,6 +32,7 @@ async function launch(sock, ev, { chatId = null, prefix = '.', test = false } = 
     try { if (first) { const s = await store.load(ev.eventId); const d = require('./commands').mapSnap(s, first.name, first.members[0]); d.view = 'overview'; d.route = null; img = await require('./render').renderMap(d); } } catch (e) { console.warn('[conquest] launch card', e.message); }
     const caption = helpCaption(prefix, test, guilds.map((g) => g.name));
     if (host && sock) { try { await sock.sendMessage(host, img ? { image: img, caption } : { text: caption }); } catch (e) { console.warn('[conquest] announce', e.message); } }
+    try { setTimeout(() => require('./cards').warm(map.hashStr(String(ev.eventId))), 3000).unref(); } catch (e) { /* warm-up only */ }
     return { ok: true, guilds: guilds.map((g) => g.name), test };
 }
 module.exports = { launch, replacesLegacy, mode, NPC };
