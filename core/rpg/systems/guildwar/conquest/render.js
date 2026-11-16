@@ -10,6 +10,13 @@ function wrap(ctx, text, x, y, w, lh) { const words = String(text).split(' '); l
 
 // ── siege scene (3D hex diorama, scene3d.js) ───────────────────────────────────────────────
 async function siegeInProcess(b) {
+    if (b.phase !== 'wall' && process.env.CONQUEST_ARENA !== '0') { // golem/titan fight → dedicated arena (3D world + pixel shader), not the wall diorama
+        const A = require('./arena'); const realm = (b.tileId || '').split(':')[0]; const gs = b.golems.filter((x) => x.hp > 0);
+        const en = gs.map((g, i) => { const titan = b.isTitan && i === 0; return { cq: titan ? `golems/titan_${realm}.png` : `golems/${g.kind}.png`, name: titan ? 'TITAN' : g.kind.toUpperCase(), hp: g.hp, max: g.max, h: titan ? 420 : 250, gap: titan ? 260 : 210 }; });
+        const party = Object.values(b.party).map((m) => ({ name: m.name, hp: m.hp, max: m.max, sprite: m.sprite }));
+        const cv = await A.arenaCard({ kind: b.isTitan ? 'titan' : (b.kind === 'ley_gate' ? 'ley_gate' : 'field'), seed: b.id, biome: b.biome, title: b.tileName, sub: `${b.attacker} · round ${b.round}/12`, right: b.isTitan ? 'TITAN' : 'GARRISON', lines: b.outcome ? [b.outcome === 'won' ? 'STRONGHOLD TAKEN' : 'ASSAULT REPELLED'] : ['Face the guardians', 'cq strike · guard · heal'], enemies: en, party });
+        return cv.toBuffer('image/jpeg', { quality: 0.9 });
+    }
     const S3 = require('./scene3d'); const { c, ctx, W, H, card } = await S3.siegeScene(b);
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 44, W, 36); ctx.fillStyle = '#ffe9a8'; ctx.font = 'bold 16px serif'; ctx.textAlign = 'center'; ctx.fillText(`${card.icon || ''} ${card.name.toUpperCase()} — ${card.text || ''}`.slice(0, 112), W / 2, 68); ctx.textAlign = 'left';
     title(ctx, W, `${b.tileName} — ${b.attacker} assault${b.defender ? ' vs ' + b.defender : ''}`, `Round ${b.round}/12 · ${b.phase === 'wall' ? 'BREAK THE WALL' : b.phase === 'golems' ? 'FACE THE GOLEMS' : b.phase.toUpperCase()}`);
@@ -39,7 +46,11 @@ async function envCardInProcess(cardId, biome) {
 // ── realm war map (3D hex scene) ──────────────────────────────────────────────────────────────
 async function mapInProcess(snap) {   // v2: big 4:5 painted-pixel card (cards.js); old 3D hex scene stays available via CONQUEST_MAP=hex
     if (process.env.CONQUEST_MAP === 'hex') { let c = await require('./scene3d').warMapScene(snap); const MAXW = 1900; if (c.width > MAXW) { const { createCanvas } = require('canvas'); const k = MAXW / c.width; const o = createCanvas(MAXW, Math.round(c.height * k)); const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, o.width, o.height); c = o; } return c.toBuffer('image/jpeg', { quality: 0.9 }); }
-    return (await require('./cards').worldCard(snap)).toBuffer('image/jpeg', { quality: 0.92 });
+    if (process.env.CONQUEST_MAP === 'paint') return (await require('./cards').worldCard(snap)).toBuffer('image/jpeg', { quality: 0.92 });
+    // default: real 3D hex world (pixel shader over the environment) framed in the portrait card
+    const C = require('./cards'); const sc = await require('./scene3d').warMapScene(Object.assign({}, snap, { portrait: true })); const { c, ctx } = C.frame(snap.route ? 'ON THE MARCH' : snap.view === 'overview' ? 'THE REALM' : 'CONQUEST', `${snap.title || ''}`, snap.sub || '');
+    const bx = 12, by = 156, bw = C.CW - 24, bh = C.CH - 156 - 12; const k = Math.max(bw / sc.width, bh / sc.height); const sw = bw / k, sh = bh / k; ctx.save(); ctx.beginPath(); ctx.rect(bx, by, bw, bh); ctx.clip(); ctx.imageSmoothingEnabled = true; ctx.drawImage(sc, (sc.width - sw) / 2, (sc.height - sh) / 2, sw, sh, bx, by, bw, bh); ctx.restore();
+    return c.toBuffer('image/jpeg', { quality: 0.92 });
 }
 
 // ── child pool (renderWorker.js type 'conquest') ──────────────────────────────────────────────
@@ -50,7 +61,7 @@ function getChild() { if (child && child.connected) return child; try { const rq
     child.on('exit', () => { child = null; for (const [id, w] of waiting) { waiting.delete(id); clearTimeout(w.t); w.rej(new Error('render child exited')); } }); return child; }
 function viaChild(what, data) { return new Promise((res, rej) => { const ch = getChild(); if (!ch) return rej(new Error('no render slot')); const id = ++seq; const t = setTimeout(() => { waiting.delete(id); rej(new Error('render timeout')); }, 40000); waiting.set(id, { res, rej, t }); ch.send({ type: 'conquest', id, what, data }); }); }
 const safe = async (what, data, inproc) => { try { return await viaChild(what, data); } catch (e) { if (process.env.CONQUEST_RENDER_INPROC === '1') return inproc(data); console.warn('[conquest] render', what, e.message); return null; } };
-async function cardInProcess(what, data) { const C = require('./cards'); const cv = what === 'targets' ? await C.targetsCard(data) : what === 'tile' ? await C.tileCard(data) : what === 'territory' ? await C.territoryCard(data) : await C.captureCard(data); return cv.toBuffer('image/jpeg', { quality: 0.92 }); }
+async function cardInProcess(what, data) { const C = require('./cards'); if (what === 'arena') return (await require('./arena').arenaCard(data)).toBuffer('image/jpeg', { quality: 0.9 }); const cv = what === 'targets' ? await C.targetsCard(data) : what === 'tile' ? await C.tileCard(data) : what === 'territory' ? await C.territoryCard(data) : await C.captureCard(data); return cv.toBuffer('image/jpeg', { quality: 0.92 }); }
 async function videoInProcess(data) { return require('./travelVideo').travelVideo(data); }
 module.exports = {
     videoInProcess, renderVideo: (d) => safe('video', d, videoInProcess), cardInProcess, renderCard: (what, data) => safe(what, data, (d) => cardInProcess(what, d)),
