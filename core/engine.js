@@ -7981,6 +7981,31 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
         });
         _moduleSock = sock; // 💡 FIX: module-level ref so getSock() works from outside startBot()
 
+        // 📌 GROUP STATUS INGRESS (2026-11-17): WhatsApp delivers group statuses as
+        // <status from="<id>@g.us" participant=...> stanzas. Baileys rc14 has no
+        // CB:status handler, so they never reached messages.upsert and the
+        // non-admin status moderation below never ran. Re-tag group-scoped status
+        // stanzas as <message> so Baileys decrypts/unwraps them like any group msg.
+        try {
+          const __gsWs = sock.ws;
+          __gsWs.on("CB:status", (node) => {
+            try {
+              const from = node?.attrs?.from;
+              if (!from || !String(from).endsWith("@g.us")) return; // personal statuses: ignore
+              if (!node.attrs.participant) {
+                console.log("[GStatusIngress] status stanza without participant, cannot route:", JSON.stringify(node.attrs));
+                return;
+              }
+              console.log("[GStatusIngress] group status stanza from=" + from + " participant=" + node.attrs.participant + " id=" + node.attrs.id);
+              __gsWs.emit("CB:message", { ...node, tag: "message" });
+            } catch (e) {
+              console.log("[GStatusIngress] route failed:", e?.message || e);
+            }
+          });
+        } catch (e) {
+          console.log("[GStatusIngress] hook install failed:", e?.message || e);
+        }
+
         sendQueue.bind(sock);
         const originalQueueSend = sendQueue.send.bind(sendQueue);
         sock.sendMessage = (j, m, o = {}) => {

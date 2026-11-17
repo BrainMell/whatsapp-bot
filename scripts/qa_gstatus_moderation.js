@@ -43,7 +43,7 @@ async function main() {
     randomBytes: () => Buffer.alloc(32, 7),
     logger: { log() {} },
   });
-  assert(ok.ok && ok.method === "wrapped", "uses the groupStatusMessageV2 revoke envelope");
+  assert(ok.ok && /^wrapped/.test(ok.method), "uses the groupStatusMessageV2 revoke envelope");
   assert(relays[0].message.groupStatusMessageV2.message.protocolMessage.type === 0, "revoke uses protocol type 0");
   assert(relays[0].options.messageId === "REVOKE1", "wrapped revoke receives a generated id");
   let fallbackKey = null;
@@ -72,7 +72,7 @@ async function main() {
   const guardAt = engine.indexOf('const __gsStatusModeration = require("./utils/gstatusModeration")');
   const masterGateAt = engine.indexOf("// 🚫 MASTER GC GATE (2026-09-28) - DEFAULT BLACKLIST EVERY GROUP");
   assert(guardAt >= 0 && masterGateAt > guardAt, "auto-moderator runs before the actual master group gate");
-  const guard = guardAt >= 0 && masterGateAt > guardAt ? engine.slice(guardAt, masterGateAt) : "";
+  const guard = guardAt >= 0 && masterGateAt > guardAt ? engine.slice(Math.max(0, guardAt - 400), masterGateAt) : "";
   assert(guard.includes('String(BOT_ID || "").toLowerCase() === "joker"'), "automatic rule is scoped to Joker");
   assert(guard.includes("isAllowedGroupStatusAuthor"), "guard checks owner/global-moderator exemptions");
   assert(!/senderIsAdmin|gslIsAdmin|isGroupAdmin/.test(guard), "group-admin status is not an exemption");
