@@ -9454,6 +9454,21 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           const __gsStatusKey = __gsStatusModeration.buildGroupStatusRevokeKey(m.key, chatId, __gsRawAuthor);
                           const __gsResult = await __gsStatusModeration.revokeGroupStatus(sock, chatId, __gsStatusKey);
                           console.log("[GStatusAutoMod] rejected author=" + (__gsAuthor || "unknown") + " in " + chatId + " revoked=" + __gsResult.ok + " method=" + (__gsResult.method || "none") + (__gsResult.error ? " error=" + __gsResult.error : ""));
+                          // 3-strike policy: warn on each non-admin group status, kick on the 3rd.
+                          try {
+                            const __gsStrikes = addWarning(__gsAuthor || __gsRawAuthor, chatId + "#gstatus", "Posted a group status");
+                            const __gsTag = "@" + String(__gsPhone || __gsAuthor).split("@")[0].split(":")[0];
+                            const __gsMention = [__gsRawAuthor || __gsAuthor].filter(Boolean);
+                            if (__gsStrikes >= 3) {
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + `🚫 ${__gsTag} posted a group status 3 times. Removing.`, mentions: __gsMention });
+                              try { await sock.groupParticipantsUpdate(chatId, [__gsRawAuthor || __gsAuthor], "remove"); resetWarnings(__gsAuthor || __gsRawAuthor, chatId + "#gstatus"); }
+                              catch (kickErr) { console.log("[GStatusAutoMod] kick failed (bot not admin?):", kickErr?.message || kickErr); }
+                            } else {
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${__gsTag} group statuses aren't allowed here. Warning ${__gsStrikes}/3.${__gsStrikes === 2 ? " Next one gets you removed." : ""}`, mentions: __gsMention });
+                            }
+                          } catch (strikeErr) {
+                            console.log("[GStatusAutoMod] strike failed:", strikeErr?.message || strikeErr);
+                          }
                           return; // Never pass a rejected status into normal message handling.
                         }
                       }
