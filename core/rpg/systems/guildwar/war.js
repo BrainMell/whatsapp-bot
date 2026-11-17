@@ -646,16 +646,21 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
         }
 
         case 'help': default: {
-            const caption = `⚔️ *GUILD WAR: THE RUINS*\n` +
-                `\`${prefix} war start\` mods: FULL-SCALE war (~4x map, 3 worlds, announced in every RPG GC)\n` +
-                `\`${prefix} war start -test\` mods: small test skirmish (this GC only)\n` +
-                `\`${prefix} war join\` enter the registering war\n` +
-                `\`${prefix} war forcestart\` mods: deploy now\n` +
-                `\`${prefix} war status\` live standings\n` +
-                `\`${prefix} war end\` mods: conclude and pay rewards\n` +
-                `\`${prefix} war abort\` mods: shut it down, no rewards\n` +
-                `\`${prefix} war rpg on|off\` admins: mark this GC for full-scale calls\n\n` +
-                `In my DMs once deployed: \`map\`, \`move forward/left/back/right\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
+            let cqOn = false; try { cqOn = require('./conquest').replacesLegacy() || require('./conquest').enabled(); } catch (e) { /* legacy help below */ }
+            if (cqOn) {
+                const caption = `⚔️ *GUILD WAR: CONQUEST*\n` +
+                    `\`${prefix} war start\` mods: open the Conquest war (guilds from this GC)\n` +
+                    `\`${prefix} war start -test\` / \`${prefix} cqtest\` mods: fast test war with 2 NPC rival guilds\n` +
+                    `\`${prefix} war join\` enter the registering war\n` +
+                    `\`${prefix} war status\` live standings\n` +
+                    `\`${prefix} war end\` mods: conclude and pay rewards · \`${prefix} war abort\` shut it down\n\n` +
+                    `🗺️ *Play it right here in the group:*\n` +
+                    `\`${prefix} cq\` the map · \`${prefix} cq targets\` pick a destination · \`${prefix} cq tile 3\` inspect\n` +
+                    `\`${prefix} cq march 3\` march (round video) · \`${prefix} cq strike|guard|shatter|ult\` in sieges\n` +
+                    `\`${prefix} cq territory\` what your guild holds\n\n` +
+                    `🏛️ The Ruins are now an *encounter* on the map: claim them with a ritual for relics.`;
+                return sock.sendMessage(chatId, { text: caption });
+            }
             try {
                 const buf = await notice.renderWarHelpCard({ prefix });
                 await sock.sendMessage(chatId, { image: buf, caption });

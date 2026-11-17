@@ -98,6 +98,7 @@ async function siegeScene(b, opts = {}) {
 
 // scenery by the tile's TERRAIN (coherent regions: mountains, hills, farmland, marsh, plains, woods) — not just trees
 function terrainDress(t, put, r2, detail, over) {
+    if (over && t.terrain !== 'mountain' && r2() < 0.5) return;   // overview: sprites are ~10px, half as many reads the same and renders ~2x faster
     const k = r2(); const j = () => ({ dx: (r2() - 0.5) * 0.8, dz: (r2() - 0.5) * 0.6 });
     switch (t.terrain) {
         case 'mountain': if (k < 0.5) put(['mountain_A_grass', 'mountain_B_grass', 'mountain_C_grass', 'mountain_A_grass_trees'][Math.floor(r2() * 4)], { sc: over ? 0.95 : 0.9 }); else { put(['hill_single_B', 'hill_single_C', 'hills_A_trees'][Math.floor(r2() * 3)], { ...j(), sc: 0.9 }); if (detail) put('rock_single_B', { ...j(), sc: 0.8 }); } break;
@@ -121,7 +122,7 @@ async function warMapScene(snap) {
         const ax = Math.min(...xs), bx = Math.max(...xs), ay = Math.min(...ys), by2 = Math.max(...ys);
         vw = Math.max(arr ? 15 : 20, bx - ax + 9); vh = Math.max(arr ? 11 : 14, by2 - ay + 7);
         if (vw > 58 || vh > 42) over = true; else { SC = Math.max(0.2, 0.5 * Math.min(1, 26 / vw, 19 / vh)); x0 = Math.max(0, Math.min(map.W - vw, Math.round((ax + bx) / 2 - vw / 2))); y0 = Math.max(0, Math.min(map.H - vh, Math.round((ay + by2) / 2 - vh / 2))); if (y0 & 1) y0--; }
-    } else if (!over) { vw = snap.vw || 27; vh = snap.vh || 20; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
+    } else if (!over) { vw = snap.vw || (snap.portrait ? 15 : 27); vh = snap.vh || (snap.portrait ? 19 : 20); if (snap.portrait) SC = 0.36; const q = map.parse(snap.me.at); x0 = Math.max(0, Math.min(map.W - vw, q.x - (vw >> 1))); y0 = Math.max(0, Math.min(map.H - vh, q.y - (vh >> 1))); if (y0 & 1) y0--; }
     if (over) { x0 = 0; y0 = 0; vw = map.W; vh = map.H; SC = 0.085; }
     const PANEL = snap.portrait ? 0 : R ? 310 : over ? 230 : 270; const detail = !over && SC >= 0.3;
     const hw = new K.HexWorld(vw, vh, { biome: biomeOf(biome), scale: SC, oobWater: true, style: over ? 'overview' : 'aldafold' });

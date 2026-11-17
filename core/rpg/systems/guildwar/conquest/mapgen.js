@@ -99,7 +99,10 @@ function fitOf(c) {
 function onLand(c, x, y) { const f = fitOf(c); const wx = 2 * (x + 0.5 * (y & 1)) + 1, wz = 1.7320508 * y + 0.9; const u = f.u0 + ((wx - f.ox) / f.s) / 864, v = f.v0 + ((wz - f.oy) / f.s) / 1210; return continents.landAt(u, v) === c.key; }
 const isLand = (key, x, y) => { const c = continents.BY_KEY ? continents.BY_KEY[key] : continents.CONTINENTS.find((k) => k.key === key); return !!c && x >= 0 && y >= 0 && x < W && y < H && onLand(c, x, y); };
 /** generate(seed) -> { seed, W, H, tiles: Map<id,tile>, realms:[{key,name,biome,provinces:[...]}], titanTiles, vein ids ... } */
-function generate(seed) {
+const GEN_CACHE = new Map();
+/** world generation is pure and expensive (seconds): memoised per seed (callers treat the result as read-only) */
+function generate(seed) { const k = String(seed); if (GEN_CACHE.has(k)) return GEN_CACHE.get(k); const g = generateRaw(seed); GEN_CACHE.set(k, g); if (GEN_CACHE.size > 4) GEN_CACHE.delete(GEN_CACHE.keys().next().value); return g; }
+function generateRaw(seed) {
     seed = seed >>> 0;
     if (_cache.has(seed)) return _cache.get(seed);
     const tiles = new Map(); const realms = [];

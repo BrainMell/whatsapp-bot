@@ -33601,6 +33601,10 @@ _(or reply to their message)_
                     }
                   }
                   // ⚔️ CONQUEST (GW_CONQUEST=1): `<prefix> cq ...` / `conquest ...` works in ANY group chat - nobody has to DM the bot
+                  if (/^cqtest\b/.test(lowerTxt.slice(prefix.length).trim())) { // `.s cqtest` = one-command fast test war (same as `.s war cqtest`)
+                    try { let nm = 'Champion'; try { nm = economy.getDisplayName(senderJid) || nm; } catch (e) {} await require('./rpg/systems/guildwar/index').handleGroupCommand(sock, chatId, senderJid, nm, ['cqtest'], { m, prefix }); } catch (e) { console.error('⚔️ [Conquest] cqtest error:', e.message); }
+                    return;
+                  }
                   if (lowerTxt.startsWith(`${prefix} cq`) || lowerTxt.startsWith(`${prefix} conquest`)) {
                     try {
                       const cqq = require('./rpg/systems/guildwar/conquest');
