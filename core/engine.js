@@ -9460,11 +9460,11 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                             const __gsTag = "@" + String(__gsPhone || __gsAuthor).split("@")[0].split(":")[0];
                             const __gsMention = [__gsRawAuthor || __gsAuthor].filter(Boolean);
                             if (__gsStrikes >= 3) {
-                              await sock.sendMessage(chatId, { text: BOT_MARKER + `🚫 ${__gsTag} posted a group status 3 times. Removing.`, mentions: __gsMention });
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + `${__gsTag} You're getting kicked for repeatedly posting on the GC status without permission.`, mentions: __gsMention });
                               try { await sock.groupParticipantsUpdate(chatId, [__gsRawAuthor || __gsAuthor], "remove"); resetWarnings(__gsAuthor || __gsRawAuthor, chatId + "#gstatus"); }
                               catch (kickErr) { console.log("[GStatusAutoMod] kick failed (bot not admin?):", kickErr?.message || kickErr); }
                             } else {
-                              await sock.sendMessage(chatId, { text: BOT_MARKER + `⚠️ ${__gsTag} group statuses aren't allowed here. Warning ${__gsStrikes}/3.${__gsStrikes === 2 ? " Next one gets you removed." : ""}`, mentions: __gsMention });
+                              await sock.sendMessage(chatId, { text: BOT_MARKER + (__gsStrikes === 1 ? `${__gsTag} Group statuses are only allowed for admins here. This is your first warning, repeat it and you will be kicked.` : `${__gsTag} Okay, second warning. Post on the group status again and you will be kicked.`), mentions: __gsMention });
                             }
                           } catch (strikeErr) {
                             console.log("[GStatusAutoMod] strike failed:", strikeErr?.message || strikeErr);
