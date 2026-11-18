@@ -9014,7 +9014,24 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           "",
                           "      _Welcome to the leadership circle._ 👑",
                         ].join("\n")
-                      : `📉 *Admin Demotion*\n\n${line}`;
+                      : [
+                          "╔════════════════════════════════╗",
+                          "       📉 *THRONE REVOKED*",
+                          "╚════════════════════════════════╝",
+                          "",
+                          targets.length === 1
+                            ? `💔 ${targetTags[0]} has been stripped of admin powers.`
+                            : `💔 These members have been stripped of admin powers:\n${targetTags.join("\n")}`,
+                          "",
+                          "The crown has been taken. 👑➡️🗑️",
+                          "",
+                          "┌─ ✦ *DEMOTION DETAILS*",
+                          `│ 📉 *New position:* Regular Member${targets.length > 1 ? "s" : ""}`,
+                          `│ ✍️ *Demoted by:* ${authorTag || "Group leadership"}`,
+                          "└────────────────────────────",
+                          "",
+                          "      _Back to the peasantry._ 🪓",
+                        ].join("\n");
 
                     await sock.sendMessage(id, {
                       text: BOT_MARKER + announcement,
@@ -9058,6 +9075,29 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   }
                 } catch (e) {}
 
+                const __kickAuthor = author && typeof author === "string" ? jidNormalizedUser(author) : null;
+                const __wasKicked = !!__kickAuthor && __kickAuthor !== participantJid;
+                const __kickTag = __kickAuthor ? `@${__kickAuthor.split("@")[0]}` : "an admin";
+                if (__wasKicked && !settings.byeMessage) {
+                  await sock.sendMessage(id, {
+                    text: [
+                      "╔════════════════════════════════╗",
+                      "         🥾 *YEETED OUT*",
+                      "╚════════════════════════════════╝",
+                      "",
+                      `🚪 @${phoneNumber} has been *KICKED* from *${groupName || "the group"}*.`,
+                      "",
+                      "┌─ ✦ *EVICTION NOTICE*",
+                      "│ ⚖️ *Verdict:* Removed from the realm",
+                      `│ 🔨 *Kicked by:* ${__kickTag}`,
+                      "└────────────────────────────",
+                      "",
+                      "      _Don't let the door hit you._ 👋💨",
+                    ].join("\n"),
+                    mentions: [participantJid, ...(__kickAuthor ? [__kickAuthor] : [])],
+                  });
+                  continue;
+                }
                 let byeText =
                   settings.byeMessage ||
                   `👋(@${phoneNumber}) has left the group. Goodbye! SUCKER!!!`;
@@ -19801,7 +19841,7 @@ Moderation:
                       );
                       console.log("✅ Promote successful");
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + `👑 *ADMIN RIGHTS GRANTED*\\n\\n@${target.split("@")[0]} is now a *Group Administrator*.`,
+                        text: BOT_MARKER + ["╔════════════════════════════════╗","       👑 *ROYAL APPOINTMENT*","╚════════════════════════════════╝","",`🎖️ Congratulations, @${target.split("@")[0]}!`,"","You are now a *GROUP ADMINISTRATOR*.","Lead with wisdom and keep the realm thriving.","","      _Welcome to the leadership circle._ 👑"].join("\n"),
                         mentions: [target],
                       });
                     } catch (err) {
@@ -19890,7 +19930,8 @@ Moderation:
                       );
                       console.log("✅ Demote successful");
                       await sock.sendMessage(chatId, {
-                        text: BOT_MARKER + "`You have been DeThrowned`",
+                        text: BOT_MARKER + ["╔════════════════════════════════╗","       📉 *THRONE REVOKED*","╚════════════════════════════════╝","",`💔 ${targets.map((t) => "@" + String(t).split("@")[0]).join(" ")} ${targets.length > 1 ? "have" : "has"} been *DeThroned*.`,"","The crown has been taken. 👑➡️🗑️","","      _Back to the peasantry._ 🪓"].join("\n"),
+                        mentions: targets,
                       });
                     } catch (err) {
                       console.error("❌ Demote failed:", err.message);
