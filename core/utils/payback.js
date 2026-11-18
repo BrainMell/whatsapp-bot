@@ -132,16 +132,11 @@ async function start(sock, chatId, o) {
 
   await sock.sendMessage(chatId, {
     text: mark + [
-      "╔════════════════════════════════╗",
-      "       🃏 *PAYBACK TIME* 🃏",
-      "╚════════════════════════════════╝",
+      "🃏 *Was it worth it?*",
       "",
-      "🔒 Group locked. Only admins can talk.",
-      `📉 ${demoted} admin${demoted === 1 ? "" : "s"} dethroned.`,
-      `🎯 Targets: ${targets.map((t) => "@" + t.id.split("@")[0]).join(" ")}`,
-      "⏱️ The next 10 minutes are going to be personal.",
+      "*Was it really worth it?* 😈",
       "",
-      "      _Joker never forgets._ 🔥",
+      targets.map((t) => "@" + t.id.split("@")[0]).join(" "),
     ].join("\n"),
     mentions: targets.map((t) => t.id),
   }).catch(() => {});
