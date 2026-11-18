@@ -7,6 +7,16 @@ const DURATION_MS = 10 * 60 * 1000;
 
 // {n} is replaced with the @tag. Pre-written, crude, nothing aimed at disability/race/etc.
 const ROASTS = [
+  "{n} you're genuinely a bum bro 🗑️",
+  "{n} I've seen shit better than you 💩",
+  "{n} you're lowkey a disappointment to everyone who's ever met you 😮‍💨",
+  "{n} bro you're such a waste of Wi-Fi 📡",
+  "{n} you add negative value to this chat and you still talk 🤐",
+  "{n} you're a bum and your mother knows it 🫵",
+  "{n} be so fr, nobody's missing you when you leave 🚶",
+  "{n} you're the reason we have the mute button 🔕",
+  "{n} you're that one friend everyone tolerates and nobody picked 🫥",
+  "{n} sit down, you've been a bum all day 🪑",
   "{n} you're dumb as a bag of wet socks 🧦",
   "{n} your brain has been buffering since birth 📶",
   "{n} you're the reason shampoo has instructions 🧴",
@@ -84,20 +94,31 @@ async function start(sock, chatId, o) {
     admin: p.admin || null,
     raw: p,
   }));
+  const wanted = new Set((o.targetJids || []).map(norm));
   const targets = everyone.filter((p) => {
-    if (!p.id) return false;
+    if (!p.id || !wanted.has(p.id)) return false;
     if (p.id === norm(o.botJid)) return false;
     if (p.id === norm(o.invokerJid)) return false;
-    try { if (o.isProtected(p.id, p.raw)) return false; } catch { return false; }
+    try { if (o.isProtected && o.isProtected(p.id, p.raw)) return false; } catch { return false; }
     return true;
   });
-  if (!targets.length) return { ok: false, reason: "nobody to target" };
+  if (!targets.length) return { ok: false, reason: "tag at least one person (not me or the owner)" };
 
-  const state = { timers: [], targets: targets.map((t) => t.id), stop() {
+  const state = { timers: [], targets: targets.map((t) => t.id), locked: false, stop() {
     for (const t of state.timers) clearTimeout(t);
     _active.delete(chatId);
+    if (state.locked) {
+      state.locked = false;
+      sock.groupSettingUpdate(chatId, "not_announcement").catch(() => {});
+    }
   } };
   _active.set(chatId, state);
+
+  // 0) lock the GC (admins-only messaging) unless it already was locked
+  if (!o.alreadyLocked) {
+    try { await sock.groupSettingUpdate(chatId, "announcement"); state.locked = true; }
+    catch (e) { console.log("[payback] lock failed:", e?.message || e); }
+  }
 
   // 1) demote every targeted admin (bot must be admin; failures are non-fatal)
   const admins = targets.filter((t) => t.admin).map((t) => t.id);
@@ -115,12 +136,14 @@ async function start(sock, chatId, o) {
       "       🃏 *PAYBACK TIME* 🃏",
       "╚════════════════════════════════╝",
       "",
+      "🔒 Group locked. Only admins can talk.",
       `📉 ${demoted} admin${demoted === 1 ? "" : "s"} dethroned.`,
-      `🎯 ${targets.length} targets locked in.`,
+      `🎯 Targets: ${targets.map((t) => "@" + t.id.split("@")[0]).join(" ")}`,
       "⏱️ The next 10 minutes are going to be personal.",
       "",
       "      _Joker never forgets._ 🔥",
     ].join("\n"),
+    mentions: targets.map((t) => t.id),
   }).catch(() => {});
 
   // 2) one roast per target, spread across 10 minutes; repeat shuffled rounds
@@ -132,7 +155,7 @@ async function start(sock, chatId, o) {
   const tick = async () => {
     if (!_active.has(chatId)) return;
     if (Date.now() - t0 >= DURATION_MS) {
-      await sock.sendMessage(chatId, { text: mark + "🃏 *Payback complete.* Kiss and make up. 🏳️" }).catch(() => {});
+      await sock.sendMessage(chatId, { text: mark + "🃏 *Payback complete.* Group unlocked. Kiss and make up. 🏳️" }).catch(() => {});
       state.stop();
       return;
     }

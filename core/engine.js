@@ -19719,17 +19719,24 @@ Moderation:
                       await sock.sendMessage(chatId, { text: BOT_MARKER + "I need to be a group admin to demote people." });
                       return;
                     }
+                    const _ci = m.message?.extendedTextMessage?.contextInfo;
+                    const _pbTargets = [...new Set([...(_ci?.mentionedJid || []), ...(_ci?.participant && !(_ci?.mentionedJid || []).length ? [_ci.participant] : [])])];
+                    if (!_pbTargets.length) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "🔥 tag who you want to drag: `.j payback @a @b` (or reply to someone). `.j payback stop` ends it." });
+                      return;
+                    }
                     const _pbMeta = groupMetadata || (await getGroupMetadata(chatId));
                     const _r = await _pb.start(sock, chatId, {
                       participants: _pbMeta?.participants || [],
                       invokerJid: senderJid,
+                      targetJids: _pbTargets,
+                      alreadyLocked: !!(groupMetadata || {}).announce,
                       botJid: sock.user?.id,
                       jidNormalizedUser,
                       mark: BOT_MARKER,
                       isProtected: (jid, p) =>
-                        isBotOwner(jid) || isGlobalMod(jid) ||
-                        (p && (isBotOwner(String(p.phoneNumber || "")) || isBotOwner(String(p.jid || "")))) ||
-                        (p && p.isBot === true),
+                        isBotOwner(jid) ||
+                        (p && (isBotOwner(String(p.phoneNumber || "")) || isBotOwner(String(p.jid || "")))),
                     });
                     if (!_r.ok) await sock.sendMessage(chatId, { text: BOT_MARKER + `payback: ${_r.reason}` });
                     return;
