@@ -132,9 +132,9 @@ async function start(sock, chatId, o) {
 
   await sock.sendMessage(chatId, {
     text: mark + [
-      "*Was it worth it?*",
+      "Was it worth it?",
       "",
-      "*Was it really worth it?*",
+      "Was it really worth it?",
       "",
       targets.map((t) => "@" + t.id.split("@")[0]).join(" "),
     ].join("\n"),
@@ -150,7 +150,7 @@ async function start(sock, chatId, o) {
   const tick = async () => {
     if (!_active.has(chatId)) return;
     if (Date.now() - t0 >= DURATION_MS) {
-      await sock.sendMessage(chatId, { text: mark + "*Payback complete.* Group unlocked. Kiss and make up." }).catch(() => {});
+      await sock.sendMessage(chatId, { text: mark + "Payback complete. Group unlocked. Kiss and make up." }).catch(() => {});
       state.stop();
       return;
     }

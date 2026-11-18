@@ -19722,7 +19722,7 @@ Moderation:
                     const _ci = m.message?.extendedTextMessage?.contextInfo;
                     const _pbTargets = [...new Set([...(_ci?.mentionedJid || []), ...(_ci?.participant && !(_ci?.mentionedJid || []).length ? [_ci.participant] : [])])];
                     if (!_pbTargets.length) {
-                      await sock.sendMessage(chatId, { text: BOT_MARKER + "🔥 tag who you want to drag: `.j payback @a @b` (or reply to someone). `.j payback stop` ends it." });
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "🔥 tag who you want to drag: .j payback @a @b (or reply to someone). .j payback stop ends it." });
                       return;
                     }
                     const _pbMeta = groupMetadata || (await getGroupMetadata(chatId));
