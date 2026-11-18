@@ -19701,6 +19701,40 @@ Moderation:
                     return;
                   }
 
+                  // 🔥 PAYBACK (2026-11-18): owner-only. `payback` starts, `payback stop` ends.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} payback` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} payback `)
+                  ) {
+                    const _pb = require("./utils/payback");
+                    if (!isOwner) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "only the bot owner can use this." });
+                      return;
+                    }
+                    if (/\bstop\b/.test(lowerTxt)) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + (_pb.stop(chatId) ? "🏳️ Payback stopped." : "nothing running.") });
+                      return;
+                    }
+                    if (!botIsAdmin) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "I need to be a group admin to demote people." });
+                      return;
+                    }
+                    const _pbMeta = groupMetadata || (await getGroupMetadata(chatId));
+                    const _r = await _pb.start(sock, chatId, {
+                      participants: _pbMeta?.participants || [],
+                      invokerJid: senderJid,
+                      botJid: sock.user?.id,
+                      jidNormalizedUser,
+                      mark: BOT_MARKER,
+                      isProtected: (jid, p) =>
+                        isBotOwner(jid) || isGlobalMod(jid) ||
+                        (p && (isBotOwner(String(p.phoneNumber || "")) || isBotOwner(String(p.jid || "")))) ||
+                        (p && p.isBot === true),
+                    });
+                    if (!_r.ok) await sock.sendMessage(chatId, { text: BOT_MARKER + `payback: ${_r.reason}` });
+                    return;
+                  }
+
                   // `${botConfig.getPrefix().toLowerCase()}` resetwarn - clear user warnings (PER GROUP)
                   if (
                     lowerTxt ===
