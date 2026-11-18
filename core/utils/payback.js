@@ -95,8 +95,12 @@ async function start(sock, chatId, o) {
     raw: p,
   }));
   const wanted = new Set((o.targetJids || []).map(norm));
+  // Mentions can arrive as LID or phone JIDs while the participant list uses the
+  // other form, so match against every alias a participant carries.
+  const aliasesOf = (p) => [p.id, p.raw && p.raw.lid, p.raw && p.raw.phoneNumber, p.raw && p.raw.jid]
+    .filter((x) => typeof x === "string" && x).map(norm);
   const targets = everyone.filter((p) => {
-    if (!p.id || !wanted.has(p.id)) return false;
+    if (!p.id || !aliasesOf(p).some((a) => wanted.has(a))) return false;
     if (p.id === norm(o.botJid)) return false;
     if (p.id === norm(o.invokerJid)) return false;
     try { if (o.isProtected && o.isProtected(p.id, p.raw)) return false; } catch { return false; }
