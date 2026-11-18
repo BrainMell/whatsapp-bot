@@ -24,7 +24,7 @@ const ROASTS = [
   "{n} you have the personality of unseasoned rice",
   "{n} you're proof that evolution takes the occasional day off",
   "{n} nobody's ever been happy to see you walk into a room, only the exit",
-  "{n} you're so slow the loading circle waits for you ⏳",
+  "{n} you're so slow the loading circle waits for you",
   "{n} your best idea was a mistake and it still had better reception than you",
   "{n} you're a walking L with a phone",
   "{n} you type like your thumbs are on a blind date ⌨",
