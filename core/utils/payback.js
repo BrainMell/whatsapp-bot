@@ -27,7 +27,7 @@ const ROASTS = [
   "{n} you're so slow the loading circle waits for you",
   "{n} your best idea was a mistake and it still had better reception than you",
   "{n} you're a walking L with a phone",
-  "{n} you type like your thumbs are on a blind date ⌨",
+  "{n} you type like your thumbs are on a blind date",
   "{n} I've seen better decisions from a coin flip. A broken one.",
   "{n} you're the group chat's background noise and not even good noise",
   "{n} you're not stupid, you just have bad luck thinking",
