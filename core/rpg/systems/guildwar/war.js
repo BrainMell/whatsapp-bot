@@ -485,15 +485,13 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             return sock.sendMessage(chatId, { text: deployText });
         }
 
-        case 'cqtest': {   // 🧪 one-command conquest test war: your guild + 2 NPC rival guilds, ~7x faster timers
+        case 'cqtest': {   // 🧪 standalone test war: no guild / DB event needed, own ticker, ~7x timers, 2 NPC rival guilds
             if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
-            const ug = guilds.getUserGuild(senderJid); if (!ug) return sock.sendMessage(chatId, { text: '❌ You must be in a guild to run a test war.' });
-            const g = guilds.getGuild(ug); const cq = require('./conquest'); if (!cq.enabled()) return sock.sendMessage(chatId, { text: '❌ Conquest is off (set GW_CONQUEST=1).' });
-            const cr = await state.createEvent({ type: 'normal', hostGroupId: chatId, initiatedBy: senderJid }); if (!cr.ok) return sock.sendMessage(chatId, { text: `❌ ${cr.reason}` });
-            const mem = [...new Set([senderJid, ...((g && g.members) || [])])];
-            for (const j of mem) { let nm = 'Champion'; try { nm = require('../../economy/economy').getDisplayName(j) || nm; } catch (e) {} await state.registerPlayer(cr.event.eventId, { jid: j, name: nm, guildId: ug, guildName: (g && g.name) || ug }); }
-            const sr = await state.startEvent(cr.event.eventId, {}); if (!sr.ok) return sock.sendMessage(chatId, { text: `❌ ${sr.reason}` });
-            await cq.launch(sock, sr.event, { chatId, prefix, test: true }); return;
+            let extra = []; try { const ci = ctx.m && ctx.m.message && ctx.m.message.extendedTextMessage && ctx.m.message.extendedTextMessage.contextInfo; extra = (ci && ci.mentionedJid) || []; } catch (e) { /* none */ }
+            let nm = senderName || 'Champion';
+            const r = await require('./conquest/testWar').start(sock, chatId, senderJid, prefix, { name: nm, extra });
+            if (!r.ok) return sock.sendMessage(chatId, { text: `❌ ${r.reason}` });
+            return sock.sendMessage(chatId, { text: `🧪 Test war live as *${r.guild}* (${r.players} player${r.players === 1 ? '' : 's'}).\nTry: \`${prefix} cq\` · \`${prefix} cq dbg\` (jump to any encounter) · \`${prefix} cq targets\`. Marches/sieges/arenas tick automatically.` });
         }
         case 'cq': case 'conquest': {   // `.war cq map` also works
             try { await require('./conquest').handleChat(sock, chatId, senderJid, 'cq ' + args.slice(1).join(' '), prefix); } catch (e) { console.error('[GW] cq:', e && e.message); }

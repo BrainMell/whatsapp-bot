@@ -268,4 +268,4 @@ function economy(state, now, events) {
     }
 }
 function standings(state) { return Object.values(state.guilds).map((g) => ({ guild: g.name, tiles: g.tiles.length, score: Math.round(g.score + g.tiles.length * 2 + g.tiles.filter((t) => view(state, t).kind === 'titan').length * 25) })).sort((a, b) => b.score - a.score); }
-module.exports = { travelSec, newWar, registerPlayer, view, frontier, threat, power, marchSolo, detach, acceptOrder, declineOrder, setAuto, openMuster, joinMuster, launchMuster, recall, teleport, writCost, tick, claimTile, ritualGuess, treatyOffer, fortify, standings, locked, isLeader, roleOf, GLYPHS, validTarget, hasDefence, ov };
+module.exports = { startMarch, travelSec, newWar, registerPlayer, view, frontier, threat, power, marchSolo, detach, acceptOrder, declineOrder, setAuto, openMuster, joinMuster, launchMuster, recall, teleport, writCost, tick, claimTile, ritualGuess, treatyOffer, fortify, standings, locked, isLeader, roleOf, GLYPHS, validTarget, hasDefence, ov };

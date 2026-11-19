@@ -77,7 +77,7 @@ async function handle({ jid, text, prefix = '.', eventDoc, chatId = null }) {
     const raw = String(text || '').trim().toLowerCase().replace(/^[.!/#]?\s*(j\s+)?/, '');
     const m = raw.match(/^(cq|conquest)\b\s*(.*)$/); if (!m) return null;
     const rest = m[2].trim(); const parts = rest.split(/\s+/).filter(Boolean); const verb = (parts[0] || 'map'); const args = parts.slice(1);
-    const L = lazy(); const guildName = L.guilds.getUserGuild(jid);
+    const L = lazy(); const guildName0 = L.guilds.getUserGuild(jid);
     if (verb === 'shop' || verb === 'gemshop' || verb === 'buy' || verb === 'gems') { // works without a live war
         const u = L.economy.getUser(jid); if (!u) return { text: '❌ Register first.' };
         if (verb === 'buy') { const r = shop.buy({ economy: L.economy, summons: L.summons, jid, card: args.join(' ') }); return { text: r.msg }; }
@@ -86,7 +86,8 @@ async function handle({ jid, text, prefix = '.', eventDoc, chatId = null }) {
     }
     if (verb === 'help') return { text: helpText() };
     let key = eventDoc && eventDoc.eventId; if (!key) { try { key = await store.keyFor(jid); } catch (e) { key = null; } }   // any chat works: group or DM
-    if (!key) return { text: '⚔️ No guild war is active for you right now. `cq shop` still works.' };
+    if (!key) return { text: `⚔️ No conquest war is active for you right now. Mods: \`${prefix} cqtest\` starts a fast test war (no guild needed). \`cq shop\` still works.` };
+    let guildName = guildName0; if (!guildName) { try { const st0 = await store.load(key); guildName = st0 && st0.players && st0.players[jid] && st0.players[jid].guild; } catch (e) { /* none */ } }   // test wars: guildless players
     if (!guildName) return { text: '❌ Join a guild first.' };
     const now = Date.now(); const events = [];
     let out = null;
@@ -137,10 +138,24 @@ function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
         case 'ritual': return reply(E.ritualGuess(s, { jid, glyphs: args, now }));
         case 'offer': return reply(E.treatyOffer(s, { jid, offer: args[0], now }));
         case 'fortify': case 'f': return reply(E.fortify(s, { guild: guildName, by: jid, tile: p.at, op: args[0], arg: args[1] }));
+        case 'dbg': case 'debug': {   // 🧪 test wars only: jump straight to any encounter type
+            if (!s.test) return { text: 'Debug jumps only work in a test war (`.j cqtest`).' };
+            const kinds = ['plain', 'village', 'forest', 'gem_vein', 'ruins', 'shrine', 'pass', 'fortress', 'ley_gate', 'titan'];
+            const kind = (args[0] || '').toLowerCase();
+            if (!kinds.includes(kind)) return { text: '🧪 *dbg* — jump to an encounter:\n' + kinds.map((k) => `\`cq dbg ${k}\` — ${map.KINDS[k].label} (${map.KINDS[k].claim})`).join('\n') };
+            if (E.locked(s, jid)) return { text: 'Finish or flee your current fight/march first.' };
+            const gm = map.generate(s.seed); const home = map.parse(p.at).realm; let best = null, bd = 1e9;
+            for (const t of gm.tiles.values()) { if (t.kind !== kind || t.realm !== home) continue; const v = E.view(s, t.id); if (v.owner) continue; const d = map.distance(gm, p.at, t.id); const dd = Number.isFinite(d) ? d : 99; if (dd < bd) { bd = dd; best = t.id; } }
+            if (!best) for (const t of gm.tiles.values()) { if (t.kind !== kind) continue; const v = E.view(s, t.id); if (v.owner) continue; best = t.id; break; }
+            if (!best) return { text: `No free ${kind} tile left in this war.` };
+            const mm = E.startMarch(s, { guild: guildName, jids: [jid], to: best, type: 'solo', by: jid, now });
+            mm.arrive = now + 2500; mm.depart = now;   // lands on the next tick (~4s) so the ticker posts the real arrival/arena cards
+            return { text: `🧪 Jumping to *${E.view(s, best).name}* (${map.KINDS[kind].label}). The encounter starts in a few seconds.` };
+        }
         case 'mine': { const r = gems.mine(s, { jid, level: minesLevel(jid), now }); if (r.ok) { const u = L.economy.getUser(jid); if (u && u.professions && u.professions.mining) u.professions.mining.xp = (u.professions.mining.xp || 0); } return reply(r); }
         case 'bank': { const r = gems.bank(s, { jid }); if (r.ok) { const u = L.economy.getUser(jid); gems.credit(u, r.credit); if (L.economy.scheduleSave) L.economy.scheduleSave(jid); } return reply(r); }
         default: return { text: helpText() };
     }
 }
-function helpText() { return ['⚔️ *CONQUEST*', '`cq map` · `cq targets` · `cq tile [#]` · `cq status` · `cq top`', 'Leaders: `cq march #` · `cq muster #` → `join` → `launch` · `cq send # members…` · `cq tp # members…` · `cq skyfall #` · `cq fortify wall|golem k|turret k|upgrade|buff`', 'Everyone: `cq accept|decline` · `cq auto on|off` · `cq recall`', 'In a siege: `ram ladder sapper fire rune shield scout` + gate/left/right/curtain; vs golems: `strike guard shatter lure rally`', 'Rituals: `cq ritual ☀ ☾ ✦ ❄` · Treaties: `cq offer supplies|gems|oath`', '💎 `cq mine` (on a ◆ vein) · `cq bank` (at your Keep/Ley Gate) · `cq shop` · `cq buy <card>`'].join('\n'); }
+function helpText() { return ['⚔️ *CONQUEST*', '🧪 Test war: `cqtest` then `cq dbg <kind>` jumps to any encounter', '`cq map` · `cq targets` · `cq tile [#]` · `cq status` · `cq top`', 'Leaders: `cq march #` · `cq muster #` → `join` → `launch` · `cq send # members…` · `cq tp # members…` · `cq skyfall #` · `cq fortify wall|golem k|turret k|upgrade|buff`', 'Everyone: `cq accept|decline` · `cq auto on|off` · `cq recall`', 'In a siege: `ram ladder sapper fire rune shield scout` + gate/left/right/curtain; vs golems: `strike guard shatter lure rally`', 'Rituals: `cq ritual ☀ ☾ ✦ ❄` · Treaties: `cq offer supplies|gems|oath`', '💎 `cq mine` (on a ◆ vein) · `cq bank` (at your Keep/Ley Gate) · `cq shop` · `cq buy <card>`'].join('\n'); }
 module.exports = { createFor, rolesFor, mapSnap, handle, run, helpText, targetsText, gridText, status };
