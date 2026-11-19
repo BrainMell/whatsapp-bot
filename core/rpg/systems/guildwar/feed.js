@@ -113,8 +113,10 @@ function digestHeader() { return DIGEST_HEADERS[_digestSeq++ % DIGEST_HEADERS.le
 //   • flush() awaits the mirror-settled promise before claiming, so a flush
 //     racing our own pending write can never see the item twice;
 //   • a DB-mirror failure keeps the item local-only (single source, no dup).
+const _cqReplaces = () => { try { return require('./conquest').replacesLegacy(); } catch (e) { return false; } };
 function queue(eventId, tier, text) {
     if (!text) return;
+    if (_cqReplaces()) return; // Conquest is the war: the legacy ruins feed must stay silent
     const item = { id: `fq_${Date.now().toString(36)}_${(_seq++).toString(36)}`, tier, text: String(text).slice(0, 300), t: Date.now(), tries: 0 };
     const s = st(eventId);
     s.queue.push(item);
@@ -380,6 +382,7 @@ async function sendToGroup(sock, dests, text, isCard) {
 // event DOC (scoreboardAt): exactly one post per SCOREBOARD_EVERY_MS across
 // the fleet; a failed send releases the claim for the next tick.
 async function postScoreboard(eventId, sock, BOT_MARKER) {
+    if (_cqReplaces()) return; // legacy 'War standings' bulletin is dead under Conquest
     const ev = await state.getEvent(eventId);
     if (!ev || ev.state !== 'ACTIVE') return;
     const s = st(eventId);
@@ -431,6 +434,7 @@ function computeScoreboard(ev) {
 // from THIS bot if this bot is the one that can reach the destination).
 async function tickAll(sock, BOT_MARKER, actives = null) {
     registerSock(sock, BOT_MARKER);
+    if (_cqReplaces()) return;
     const ids = new Set(feedStates.keys());
     if (Array.isArray(actives)) for (const ev of actives) ids.add(ev.eventId);
     for (const eventId of ids) {

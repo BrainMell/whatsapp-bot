@@ -28,11 +28,18 @@ async function launch(sock, ev, { chatId = null, prefix = '.', test = false } = 
     const create = () => { const s = E.newWar({ key: ev.eventId, seed: map.hashStr(String(ev.eventId)), guilds, hours: test ? 1 : 3, test, hostGroup: host }); for (const g of guilds) if (g.npc && s.guilds[g.name]) s.guilds[g.name].npc = true; for (const p of Object.values(s.players)) p.chat = host; return s; };
     await store.mutate(ev.eventId, () => true, create);
     for (const g of guilds) for (const j of g.members) { try { await store.setIndex(j, ev.eventId); } catch (e) { console.warn('[conquest] index', e.message); } }
-    const first = guilds.find((g) => g.members.length); let img = null;
-    try { if (first) { const s = await store.load(ev.eventId); const d = require('./commands').mapSnap(s, first.name, first.members[0]); d.view = 'overview'; d.route = null; img = await require('./render').renderMap(d); } } catch (e) { console.warn('[conquest] launch card', e.message); }
     const caption = helpCaption(prefix, test, guilds.map((g) => g.name));
-    if (host && sock) { try { await sock.sendMessage(host, img ? { image: img, caption } : { text: caption }); } catch (e) { console.warn('[conquest] announce', e.message); } }
-    try { setTimeout(() => require('./cards').warm(map.hashStr(String(ev.eventId))), 3000).unref(); } catch (e) { /* warm-up only */ }
+    // NEVER block the command on rendering: the box renders slowly and chat commands time out at ~45s.
+    // Send the announcement text at once; the realm map follows when (and if) it finishes.
+    if (host && sock) { try { await sock.sendMessage(host, { text: caption }); } catch (e) { console.warn('[conquest] announce', e.message); } }
+    const first = guilds.find((g) => g.members.length);
+    if (first && host && sock) {
+        (async () => {
+            try { const s = await store.load(ev.eventId); const d = require('./commands').mapSnap(s, first.name, first.members[0]); d.view = 'overview'; d.route = null; const img = await require('./render').renderMap(d); if (img) await sock.sendMessage(host, { image: img, caption: '🗺️ The realm' }); }
+            catch (e) { console.warn('[conquest] launch map', e && e.message); }
+        })();
+    }
+    try { setTimeout(() => require('./cards').warm(map.hashStr(String(ev.eventId))), 60000).unref(); } catch (e) { /* warm-up only */ }
     return { ok: true, guilds: guilds.map((g) => g.name), test };
 }
 module.exports = { launch, replacesLegacy, mode, NPC };

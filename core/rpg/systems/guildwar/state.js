@@ -247,7 +247,8 @@ async function startEvent(eventId, { deadWorld = null, worldIds = null } = {}) {
     // bosses are ON THE MAP FROM WAR START — the finale ledger opens here and
     // spawnFinaleBosses (below) fills it. The war timer no longer SPAWNS
     // anything; passing endsAt only opens the hourglass grace.
-    const wardensFromStart = !!CFG.FINALE.FROM_START;
+    let _cqOn = false; try { _cqOn = require('./conquest').replacesLegacy(); } catch (e) { /* legacy */ }
+    const wardensFromStart = !!CFG.FINALE.FROM_START && !_cqOn; // Conquest replaces the Wardens hunt
     const updated = await GuildWarEvent.findOneAndUpdate(
         { eventId, state: 'REGISTRATION' },
         {
