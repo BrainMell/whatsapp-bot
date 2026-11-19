@@ -66,6 +66,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'setbye', desc: 'Set or view custom goodbye message.', usage: 'setbye [text]' },
     { cmd: 'warn', desc: 'Give a warning to a member. 5 warnings = Kick.', usage: 'warn @user [reason]' },
     { cmd: 'resetwarn', desc: 'Reset warnings for a user.', usage: 'resetwarn @user' },
+    { cmd: 'flowtest', desc: 'Owner only: WhatsApp Flows experiment (simple, complex, image, swap).', usage: 'flowtest simple' },
     { cmd: 'payback', desc: 'Owner only: demote non-owner admins and roast everyone for 10 minutes. `payback stop` ends it.', usage: 'payback' },
     { cmd: 'warnings', desc: 'Check warning count for a user.', usage: 'warnings @user' },
     { cmd: 'promote', desc: 'Promote a member to admin.', usage: 'promote @user' },

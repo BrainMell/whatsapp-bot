@@ -9,6 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 require("dotenv").config();
 const botConfig = require("../botConfig");
+const flowLab = require('./commands/flowLab'); // 🧪 WhatsApp Flows experiment
 const listMenu = require('./commands/listMenu'); // 🧪 native list menu experiment
 const { storage } = botConfig;
 const system = require('./utils/system');
@@ -10063,7 +10064,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // Scored heuristics (message-id fingerprints, linked-device
                   // relays, interactive payloads, instant-on-join, bot marks).
                   // Admins/owner/global mods are always exempt.
-                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe && !listMenu.isMenuTap(m)) { // 🧪 menu taps are humans, not bots
+                  if (isGroupChat && getGroupSettings(chatId).antibot === true && !m.key.fromMe && !listMenu.isMenuTap(m) && !flowLab.isFlowLabTap(m)) { // 🧪 menu taps are humans, not bots
                     try {
                       const antiBot = require('./utils/antibot');
                       const abSettings = getGroupSettings(chatId);
@@ -10572,6 +10573,13 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // default pipeline would silently ignore them. Route
                   // jmenu:* rowIds back into the menu system; log every tap
                   // response so adoption vs the typed menu is measurable.
+                  if (flowLab.isFlowLabTap(m)) {
+                    try {
+                      if (await flowLab.handleTap(sock, chatId, senderJid, m, BOT_MARKER)) return;
+                    } catch (__flErr) {
+                      console.error("[FLOWLAB] tap handler error:", __flErr?.message || __flErr);
+                    }
+                  }
                   if (listMenu.hasTapPayload(m)) {
                     try {
                       const __rowId = listMenu.extractMenuRowId(m);
@@ -19697,6 +19705,25 @@ Moderation:
                         "warn @troll spamming",
                         "Accumulating 5 warnings results in an automatic kick.",
                       );
+                    }
+                    return;
+                  }
+
+                  // 🧪 FLOW LAB (2026-11-19): owner-only WhatsApp Flows experiment.
+                  if (
+                    lowerTxt === `${botConfig.getPrefix().toLowerCase()} flowtest` ||
+                    lowerTxt.startsWith(`${botConfig.getPrefix().toLowerCase()} flowtest `)
+                  ) {
+                    if (!isOwner) {
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "only the bot owner can use this." });
+                      return;
+                    }
+                    try {
+                      const _fa = lowerTxt.slice(`${botConfig.getPrefix().toLowerCase()} flowtest`.length).trim().split(/\s+/).filter(Boolean);
+                      await flowLab.handleCommand(sock, chatId, senderJid, _fa, BOT_MARKER);
+                    } catch (_fe) {
+                      console.error("[FLOWLAB] command error:", _fe?.message || _fe);
+                      await sock.sendMessage(chatId, { text: BOT_MARKER + "flowtest failed: " + (_fe?.message || _fe) });
                     }
                     return;
                   }
