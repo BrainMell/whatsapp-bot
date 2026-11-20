@@ -133,7 +133,7 @@ function generateRaw(seed) {
         }
         // landmarks (all snapped to the nearest LAND tile): 6 guild keeps spread over the realm, ley gates at province junctions, titan lairs, realm gates on the coast
         const land = [...tiles.values()].filter((t) => t.realm === c.key); const taken = new Set();
-        const nearest = (gx, gy, ok = () => true) => { let best = null, bd = 1e9; for (const t of land) { if (taken.has(t.id) || !ok(t)) continue; const d = (t.x - gx) ** 2 + (t.y - gy) ** 2; if (d < bd) { bd = d; best = t; } } if (best) taken.add(best.id); return best; };
+        const nearest = (gx, gy, ok = () => true) => { let best = null, bd = 1e9; for (const t of land) { if (taken.has(t.id)) continue; const d = (t.x - gx) ** 2 + (t.y - gy) ** 2; if (d >= bd || !ok(t)) continue; bd = d; best = t; } if (best) taken.add(best.id); return best; };
         const solid = (t, R = 3) => { let seen = new Set([t.id]), fr = [[t.x, t.y]], n = 0, ok = 0; for (let d = 0; d < R; d++) { const nx = []; for (const [x, y] of fr) for (let k = 0; k < 6; k++) { const [a, b2] = hexNb(x, y, k); const id = tileId(c.key, a, b2); if (seen.has(id)) continue; seen.add(id); n++; if (tiles.has(id)) { ok++; nx.push([a, b2]); } } fr = nx; } return ok >= n * 0.95; };
         const kx = [0.2, 0.8, 0.2, 0.8, 0.5, 0.5], ky = [0.18, 0.18, 0.82, 0.82, 0.62, 0.2];
         kx.forEach((fx, i) => { const t = nearest(fx * W, ky[i] * H, (q) => solid(q, 4) && (q.terrain === 'plain' || q.terrain === 'farm')); if (t) { t.kind = 'keep'; t.name = sc.keep[0]; } });
