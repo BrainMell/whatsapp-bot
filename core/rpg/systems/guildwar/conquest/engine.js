@@ -182,7 +182,7 @@ function arrive(state, m, now, events) {
     if (v.owner === guild) { events.push({ type: 'reinforce', guild, tile: m.to }); return; }
     if (v.owner && v.shieldUntil > now) { events.push({ type: 'bounced', guild, tile: m.to }); return; }
     const kind = v.claim = require('./mapgen').KINDS[v.kind].claim;
-    if (kind === 'siege' || kind === 'titan' || (hasDefence(v) && (v.owner || (kind !== 'ritual' && kind !== 'treaty')))) return startBreach   // neutral ruins/shrines keep their rite/treaty even with a stray garrison; held ones are sieged(state, m, v, now, events);
+    if (kind === 'siege' || kind === 'titan' || (hasDefence(v) && (v.owner || (kind !== 'ritual' && kind !== 'treaty')))) return startBreach(state, m, v, now, events);   // neutral ruins/shrines keep their rite/treaty even with a stray garrison; held ones are sieged
     if (kind === 'ritual') return startRitual(state, m, v, now, events);
     if (kind === 'treaty') return startTreaty(state, m, v, now, events);
     claimTile(state, guild, m.to, now); events.push({ type: 'claimed', guild, tile: m.to, by: m.members });

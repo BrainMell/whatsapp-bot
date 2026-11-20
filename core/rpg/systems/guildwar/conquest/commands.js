@@ -105,7 +105,7 @@ function routeReply(s, r, guildName, jid, now) { if (!r.ok || !r.march) return {
 function run(s, { jid, guildName, verb, args, rest, now, L, events }) {
     if (s.status !== 'active') return { text: '🏁 The conquest has ended. ' + JSON.stringify(E.standings(s)) };
     if (!s.guilds[guildName]) return { text: '❌ Your guild did not enter this war.' };
-    const role = rolesFor(guildName); s.guilds[guildName].roles = role;
+    const role = rolesFor(guildName); if (Object.keys(role).length) s.guilds[guildName].roles = role; else if (s.test) { const rr = s.guilds[guildName].roles || {}; if (!rr[jid]) rr[jid] = Object.values(rr).includes('master') ? 'officer' : 'master'; s.guilds[guildName].roles = rr; }   // test wars: guildless players lead their test company
     E.registerPlayer(s, guildName, jid, nameOf(jid), powerOf(jid)); const p = s.players[jid]; p.sprite = spriteOf(jid);
     const T = (n) => (targetsCache.get(jid) || [])[parseInt(n, 10) - 1];
     const roster = () => Object.values(s.players).filter((x) => x.guild === guildName);
