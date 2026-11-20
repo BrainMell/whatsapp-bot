@@ -91,5 +91,22 @@ module.exports = {
         PORT: 3003,
       },
     },
+    {
+      ...APP_BASE,
+      // Lapis (2026-11-19): fresh tenant on this box. 500M ceiling because
+      // first-ever boot (full Mongo load, no boot snapshot yet) spikes to
+      // ~465MB and the 380M default kill-looped it every ~30s.
+      max_memory_restart: '500M',
+      name: 'wa-lapis',
+      out_file: '~/.pm2/logs/wa-lapis-out.log',
+      error_file: '~/.pm2/logs/wa-lapis-error.log',
+      env: {
+        NODE_ENV: 'production',
+        BOT_INSTANCE: 'Lapis',
+        GLOBAL_SCHEDULERS: '0',
+        START_DELAY_MS: '0',
+        PORT: 3004,
+      },
+    },
   ],
 };
