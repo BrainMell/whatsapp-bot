@@ -4,8 +4,11 @@ const store = require('./store'); const E = require('./engine'); const breach = 
 async function tickWar(ev, sock) {
     if (!enabled() || !ev || !ev.eventId || !sock) return;
     let ended = false; const sends = []; const imgs = []; const arrivals = []; const chatMap = {}; let hostGroup = null; const gcLines = []; const caps = []; const arenas = []; const map = require('./mapgen');
+    const me = sock.user && String(sock.user.id).split(':')[0].split('@')[0]; const vparts = [];
     await store.mutate(ev.eventId, (s) => {
         if (s.status !== 'active') return;
+        if (me) { if (s.tickOwner && s.tickOwner !== me && Date.now() - (s.tickOwnerAt || 0) < 30000) return; s.tickOwner = me; s.tickOwnerAt = Date.now(); }   // one bot delivers: the one players talk to
+        for (const m of Object.values(s.marches)) if (m.status === 'marching' && m.vidAt && Date.now() >= m.vidAt - 14000) { const at = m.vidAt; const left = m.arrive - at; m.vidAt = left > 3000 ? at + 50000 : null; if (left > 3000) for (const j of m.members) { try { const cq = require('./commands'); const d = cq.mapSnap(s, m.guild, j); d.route = require('./travel').routeOf(s, m, 'transit', at, j); vparts.push([j, d, at]); } catch (e) { /* skip */ } } }
         hostGroup = s.hostGroup || null; for (const p of Object.values(s.players)) if (p.chat) chatMap[p.jid] = p.chat;
         const before = Object.fromEntries(Object.entries(s.breaches).map(([id, b]) => [id, Object.keys(b.party)]));
         const events = E.tick(s, Date.now());
@@ -36,6 +39,14 @@ async function tickWar(ev, sock) {
     for (const [jid, d, nm] of arrivals) { const img = await rr.renderMap(d); if (img) { try { await sock.sendMessage(to(jid), { image: img, caption: tag(jid, `📍 Arrived at ${nm}`), ...mention(jid) }); } catch (er) { /* unreachable */ } } }
     for (const [jids, b] of imgs) { const img = await rr.renderSiege(b); if (img) for (const j of new Set(jids.map(to))) { try { await sock.sendMessage(j, { image: img, caption: `🧱 ${b.tileName} — round ${b.round}` }); } catch (e) { /* unreachable */ } } }
     for (const [jid, text] of sends) { try { await sock.sendMessage(to(jid), { text: tag(jid, text), ...mention(jid) }); } catch (e) { /* unreachable */ } }
+    // 🎞️ chained travel video notes: render the next ~50s segment a little early, deliver it exactly when the previous one ends
+    for (const [jid, d, at] of vparts) {
+        try {
+            const rv = require('./render'); const vid = await rv.renderVideo(d); if (!vid) continue;
+            const wait = Math.max(0, at - Date.now()); if (wait > 0) await new Promise((r) => setTimeout(r, Math.min(wait, 20000)));
+            await sock.sendMessage(chatMap[jid] || jid, { video: vid, ptv: true, mimetype: 'video/mp4' });
+        } catch (e) { console.warn('[conquest] video part', e && e.message); }
+    }
     if (hostGroup && gcLines.length) { try { await sock.sendMessage(hostGroup, { text: gcLines.slice(0, 6).join('\n') }); } catch (e) { /* GC unreachable */ } }
 }
 module.exports = { tickWar };

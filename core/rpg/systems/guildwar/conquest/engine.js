@@ -84,6 +84,7 @@ function startMarch(state, { guild, jids, to, type, by, now }) {
     const d = map.distance(gmap(state), from, to); const dist = Number.isFinite(d) ? d : 40;
     const id = uid(state, 'M'); const sec = travelSec(dist, state);
     const m = state.marches[id] = { id, guild, type, by, members: jids.slice(), from, to, depart: now, arrive: now + sec * 1000, status: 'marching', dist, path: map.route(gmap(state), from, to) || [from, to] };
+    if (sec > 53) m.vidAt = now + 50000;   // travel video notes are chained: next ~50s segment starts here
     for (const j of jids) { const p = state.players[j]; p.status = 'transit'; p.marchId = id; }
     return m;
 }

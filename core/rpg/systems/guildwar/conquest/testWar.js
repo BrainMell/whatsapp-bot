@@ -37,4 +37,5 @@ function startTicker(sock, ev) {
     _tickers.set(ev.eventId, timer);
 }
 
-module.exports = { start, startTicker, TICK_MS };
+function ensureTicker(sock, eventId) { if (!eventId || _tickers.has(eventId)) return; startTicker(sock, { eventId }); }
+module.exports = { start, startTicker, ensureTicker, TICK_MS };

@@ -21,7 +21,7 @@ async function makeAudio(dir, sec, mode) {
 }
 
 async function travelVideo(snap, opts = {}) {
-    const sec = opts.sec || 6; const frames = sec * FPS; const R = snap.route; if (!R || !(R.path || []).length) return null;
+    const sec = Math.max(3, Math.min(55, Math.round(opts.sec || (snap.route && snap.route.mode !== 'arrive' ? Math.min(snap.route.etaSec || 6, 50) : 6)))); const frames = sec * FPS; const R = snap.route; if (!R || !(R.path || []).length) return null;
     // 🗺️ the world is the SAME 3D hex map + pixel shader as the realm card (rendered once, bare), then the camera pans along the route
     const world = await require('./scene3d').warMapScene(Object.assign({}, snap, { portrait: true, bare: true })); const IW = world.width, IH = world.height;
     const pts = R.path.map((id) => world.P(id)).filter(Boolean).map((p) => [p.x, p.y]); if (pts.length < 2) return null; const dest = pts[pts.length - 1];
@@ -29,9 +29,9 @@ async function travelVideo(snap, opts = {}) {
     const at = (d) => { d = Math.max(0, Math.min(total, d)); let i = 1; while (i < lens.length - 1 && lens[i] < d) i++; const f = (d - lens[i - 1]) / Math.max(0.0001, lens[i] - lens[i - 1]); return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f, pts[i][0] - pts[i - 1][0]]; };
     const ZOOM = Math.max(1.1, Math.min(2.2, SZ / (IW / 4.2))); const VW = SZ / ZOOM;
     const SPm = require('./sprites'); const hero = snap.me && snap.me.sprite ? await SPm.character(snap.me.sprite).catch(() => null) : null; const boot = hero || await C.icon('boot', '#ffffff', 26, 2); const flag = await C.icon('flag', '#ff4d4d', 40, 2); const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tv-')); const jpgs = [];
-    const arrive = R.mode === 'arrive'; const p0 = arrive ? 0.85 : Math.max(0, R.progress || 0);
+    const arrive = R.mode === 'arrive'; const p0 = arrive ? 0.85 : Math.max(0, R.progress || 0); const totalSec = Math.max(1, R.totalSec || sec); const p1 = arrive ? 1 : Math.min(1, p0 + sec / totalSec); const eta0 = Math.max(0, R.etaSec != null ? R.etaSec : Math.round((1 - p0) * totalSec));
     for (let f = 0; f < frames; f++) {
-        const t = f / (frames - 1); const ease = t * t * (3 - 2 * t); const prog = Math.min(1, p0 + (1 - p0) * ease * (arrive ? 1 : 0.55 + 0.45 * 0)); const d = total * (arrive ? Math.min(1, 0.7 + 0.3 * ease) : Math.min(1, 0.06 + 0.9 * ease)); const [px, py, vx] = at(d);
+        const t = f / (frames - 1); const ease = t; const prog = p0 + (p1 - p0) * t; const d = total * (arrive ? Math.min(1, 0.7 + 0.3 * ease) : Math.max(0.02, Math.min(1, prog))); const [px, py, vx] = at(d);
         const cv = createCanvas(SZ, SZ); const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
         let camx = px - VW / 2, camy = py - VW / 2; camx = Math.max(0, Math.min(IW - VW, camx)); camy = Math.max(0, Math.min(IH - VW, camy));
         x.drawImage(world, camx, camy, VW, VW, 0, 0, SZ, SZ);
@@ -48,9 +48,9 @@ async function travelVideo(snap, opts = {}) {
         // vignette + round mask
         const vg = x.createRadialGradient(SZ / 2, SZ / 2, SZ * 0.32, SZ / 2, SZ / 2, SZ * 0.72); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10,6,20,.65)'); x.fillStyle = vg; x.fillRect(0, 0, SZ, SZ);
         // progress ring
-        x.lineWidth = 14; x.strokeStyle = 'rgba(0,0,0,.55)'; x.beginPath(); x.arc(SZ / 2, SZ / 2, SZ / 2 - 9, 0, 7); x.stroke(); x.strokeStyle = '#ffe066'; x.beginPath(); x.arc(SZ / 2, SZ / 2, SZ / 2 - 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (arrive ? 1 : Math.min(1, p0 + (1 - p0) * ease * 0.5))); x.stroke();
+        x.lineWidth = 14; x.strokeStyle = 'rgba(0,0,0,.55)'; x.beginPath(); x.arc(SZ / 2, SZ / 2, SZ / 2 - 9, 0, 7); x.stroke(); x.strokeStyle = '#ffe066'; x.beginPath(); x.arc(SZ / 2, SZ / 2, SZ / 2 - 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (arrive ? 1 : prog)); x.stroke();
         // caption
-        x.textAlign = 'center'; C.lbl(x, arrive ? 'ARRIVED' : `→ ${R.toName || ''}`.slice(0, 24), SZ / 2, SZ - 74, 26, '#fff'); if (!arrive && R.etaSec != null) C.lbl(x, `ETA ${R.etaSec >= 90 ? Math.round(R.etaSec / 60) + ' min' : R.etaSec + 's'}`, SZ / 2, SZ - 44, 22, '#ffe066');
+        x.textAlign = 'center'; C.lbl(x, arrive ? 'ARRIVED' : `→ ${R.toName || ''}`.slice(0, 24), SZ / 2, SZ - 74, 26, '#fff'); if (!arrive) { const left = Math.max(0, Math.round(eta0 - t * sec)); C.lbl(x, `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}${p1 < 1 ? '  ▸' : ''}`, SZ / 2, SZ - 44, 24, '#ffe066'); }
         jpgs.push(cv.toBuffer('image/jpeg', { quality: 0.82 })); if (process.env.DUMP && f === 20) require('fs').writeFileSync(process.env.DUMP, jpgs[f]);
     }
     const wav = await makeAudio(dir, sec, R.mode); const out = path.join(dir, 'travel.' + OUT);

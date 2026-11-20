@@ -72,7 +72,7 @@ function status(s, guild, jid) {
 }
 function pushEvents(events, guildOf) { return events; }
 
-async function handle({ jid, text, prefix = '.', eventDoc, chatId = null }) {
+async function handle({ jid, text, prefix = '.', eventDoc, chatId = null, botId = null }) {
     if (!enabled()) return null;
     const raw = String(text || '').trim().toLowerCase().replace(/^[.!/#]?\s*(j\s+)?/, '');
     const m = raw.match(/^(cq|conquest)\b\s*(.*)$/); if (!m) return null;
@@ -92,7 +92,7 @@ async function handle({ jid, text, prefix = '.', eventDoc, chatId = null }) {
     const now = Date.now(); const events = [];
     let out = null;
     await store.mutate(key, (s) => {
-        out = run(s, { jid, guildName, verb, args, rest, now, L, events }); if (s.players[jid]) s.players[jid].chat = chatId || jid;   // replies/reminders go back to where they play
+        out = run(s, { jid, guildName, verb, args, rest, now, L, events }); if (s.players[jid]) s.players[jid].chat = chatId || jid; if (botId) { s.tickOwner = botId; s.tickOwnerAt = now; }   // replies/reminders go back to where they play
         E.tick(s, now, events);
     }, eventDoc ? createFor(eventDoc) : undefined);
     if (out === undefined || out === null && !(await store.load(key))) return { text: '⚔️ That war has ended.' };
