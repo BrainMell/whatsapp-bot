@@ -24,7 +24,12 @@ async function card(draw) {
     } catch (e) { console.error('[NoirCards] render failed:', e.message); return null; }
 }
 const bgOf = async (id) => { try { return await cards.loadBg(id); } catch (e) { return null; } };
-const spr = async (id) => { try { return await cards.loadSprite(id); } catch (e) { return null; } };
+const characters = require('./characters');
+// resolve the character id to its real sprite file (ids and file stems differ for some cast members)
+const spr = async (id) => {
+    try { const ch = characters.getCharacter(id); const stem = String((ch && ch.id === id && ch.sprite) || id).replace(/\.png$/i, ''); return await cards.loadSprite(stem); }
+    catch (e) { return null; }
+};
 
 function cover(ctx, img, zoom = 1.08) {
     if (!img) { ctx.fillStyle = '#0d0b10'; ctx.fillRect(0, 0, W, H); return; }

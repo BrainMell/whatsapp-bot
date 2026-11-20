@@ -26,6 +26,7 @@ const characters = require('./characters');
 const cases = require('./cases');
 const anim = require('./noirAnim');
 const ncards = require('./noirCards');
+const ncb = require('./noirClipboard');
 
 const STATE_KEY = 'murder_noir_games_v1';
 const MIN_PLAYERS = 4;
@@ -220,6 +221,7 @@ function makeGame(ctx) {
       account: null,
     }],
     rooms: [], round: 1, case: null, nightAct: null,
+    boardClues: [], pins: [], claimsPublic: {},
     notes: [], votes: {}, accusations: {}, ghostTier: 0, murders: 0,
     dawn: null, verdict: null, events: [],
     _sock: ctx.sock || null,
@@ -243,6 +245,32 @@ function roleDeck(n) {
   if (n >= 6) roles.push('ACCOMPLICE');   // the killer's partner: a private line + one sabotage a night
   while (roles.length < n) roles.push('CIVILIAN');
   return shuffle(roles);
+}
+
+// signature item per character: what they leave behind. Art is one of assets/clues/.
+const SIGNATURE = {
+  butler2:      { art: 'brass_key.jpg',       obj: 'A brass master key on a loop of cord', tell: () => 'the sort a butler keeps on his ring' },
+  boy:          { art: 'muddy_boots.jpg',     obj: 'Small, muddy bootprints',               tell: (n) => n + '\u2019s size, still damp' },
+  chef_girl:    { art: 'nightcap_cup.jpg',    obj: 'A cup of warm milk, almond-sweet',      tell: (n) => 'kitchen china, ' + n + '\u2019s recipe' },
+  chef:         { art: 'piano_wire.jpg',      obj: 'A fine cheese wire, wiped clean',       tell: (n) => n + '\u2019s kitchen kit' },
+  girl1:        { art: 'perfume_vial.jpg',    obj: 'A cut-glass vial, rose and myrrh',      tell: (n) => n + '\u2019s scent' },
+  girl10:       { art: 'foxglove_bouquet.jpg',obj: 'A sprig of foxglove, freshly cut',      tell: (n) => 'from ' + n + '\u2019s conservatory' },
+  girl13:       { art: 'thread_spool.jpg',    obj: 'A spool of dark silk thread',           tell: (n) => n + '\u2019s needlework' },
+  girl5:        { art: 'candlestick.jpg',     obj: 'A black-wax candle, burned crooked',    tell: (n) => n + '\u2019s sort of light' },
+  investigator: { art: 'torn_letter.jpg',     obj: 'A torn page of neat, hurried notes',    tell: (n) => 'in ' + n + '\u2019s hand' },
+  maid1:        { art: 'letter_opener.jpg',   obj: 'A letter opener, dusted and set straight', tell: (n) => n + ' tidies as she goes' },
+  nurse1:       { art: 'claret_goblet.jpg',   obj: 'A glass that smells of carbolic',       tell: (n) => n + '\u2019s hands were on it' },
+  _default:     { art: 'handkerchief.jpg',    obj: 'A folded linen square',                 tell: (n) => 'it belongs to ' + n },
+};
+function methodArt(title) {
+  const t = String(title || '').toLowerCase();
+  if (t.includes('claret')) return 'claret_goblet.jpg';
+  if (t.includes('letter opener')) return 'letter_opener.jpg';
+  if (t.includes('piano wire')) return 'piano_wire.jpg';
+  if (t.includes('candlestick')) return 'candlestick.jpg';
+  if (t.includes('nightcap')) return 'nightcap_cup.jpg';
+  if (t.includes('foxglove')) return 'foxglove_bouquet.jpg';
+  return null;   // a fall / pillow / stair has no prop: the card shows the room instead
 }
 
 function dealCase(game) {
@@ -321,25 +349,52 @@ function dealCase(game) {
   if (witnesses.length) {
     sightings[witnesses[0].char.id].push({ who: killer.char.id, slot: '11 PM', room: murderRoom.id, kind: 'glimpse' });
   }
-  // Search finds: round-indexed per room. The trace lives in the murder room (round 2+).
-  const trace = pick(TRACES);
-  const j = initial(killer.char.name);
+  // ---- STORY-DERIVED CLUES (rebuilt 2026-11-20) ---------------------------------
+  // Every find is a fact about the case: who was in which room at which hour.
+  // Nothing is random set-dressing any more, so each clue can be pinned to a guest,
+  // a room and an hour, and the clipboard can string them together.
+  //   • the method  — the weapon lies in the murder room (round 1)
+  //   • the trace   — the killer's initial in the blood (round 2)
+  //   • presence    — a guest's signature item, left in the room they REALLY were in
+  //                   at that hour. The killer's 10 PM item breaks their alibi.
   const searchIndex = {};
   for (const r of game.rooms) searchIndex[r.id] = [];
-  searchIndex[murderRoom.id].push({ round: 2, art: trace.art, isTrace: true, line: trace.line(j) });
-  const arts = ['muddy_boots.jpg', 'candlestick.jpg', 'claret_goblet.jpg', 'thread_spool.jpg', 'torn_letter.jpg', 'perfume_vial.jpg', 'brass_key.jpg', 'nightcap_cup.jpg', 'piano_wire.jpg', 'foxglove_bouquet.jpg'];
-  for (const r of game.rooms) {
-    if (r.id === murderRoom.id) continue;
-    const n = pick([0, 1, 1, 2]);
-    for (let k = 0; k < n; k++) {
-      searchIndex[r.id].push({ round: pick([1, 1, 2, 3]), art: pick(arts), isTrace: false, line: flavorFind() });
-    }
-    searchIndex[r.id].sort((a, b) => a.round - b.round);
-  }
+  let clueN = 0;
+  const addClue = (roomId, c) => {
+    if (searchIndex[roomId].length >= 3) return false;
+    c.cid = 'C' + (++clueN); c.roomId = roomId;
+    searchIndex[roomId].push(c);
+    return true;
+  };
+  const trace = pick(TRACES);
+  const j = initial(killer.char.name);
+  const method = pick(cases.METHODS);
+  const mArt = methodArt(method.title);
+  addClue(murderRoom.id, { kind: 'method', round: 1, slot: '11 PM', art: mArt, who: null, isTrace: false,
+    line: method.flavor + ' This is how ' + victimName.split(' ')[0] + ' ' + victimName.split(' ')[1] + ' died.' });
+  addClue(murderRoom.id, { kind: 'trace', round: 2, slot: '11 PM', art: trace.art, who: null, isTrace: true, initial: j, line: trace.line(j) });
+  const presence = (pl, slot, rnd) => {
+    const sig = SIGNATURE[pl.char.id] || SIGNATURE._default;
+    const roomId = truth[pl.char.id][slot];
+    return addClue(roomId, { kind: 'presence', round: rnd, slot, art: sig.art, who: pl.char.id, whoName: pl.char.name, isTrace: false,
+      line: sig.obj + ' — ' + sig.tell(pl.char.name) + '. Left here around ' + slot + '.' });
+  };
+  presence(killer, '10 PM', 2);                       // breaks the killer's 10 PM alibi
+  const innocents = shuffle(game.players.filter((p) => p !== killer));
+  const used = new Set();
+  const give = (pl, slot, rnd) => { const k = pl.char.id + '|' + slot; if (used.has(k)) return; if (presence(pl, slot, rnd)) used.add(k); };
+  const slotRound = { '9 PM': () => 1, '10 PM': () => pick([1, 2]), '11 PM': () => pick([2, 3]) };
+  innocents.slice(0, 2).forEach((pl, i) => {          // two guests get a two-hour trail (a string to follow)
+    const pair = i === 0 ? ['9 PM', '10 PM'] : ['10 PM', '11 PM'];
+    for (const sl of pair) give(pl, sl, slotRound[sl]());
+  });
+  let extra = Math.max(2, game.players.length - 3);
+  for (const pl of innocents.slice(2)) { if (extra-- <= 0) break; const sl = pick(SLOTS); give(pl, sl, slotRound[sl]()); }
+  for (const r of game.rooms) searchIndex[r.id].sort((a, b) => a.round - b.round);
   const hintText = 'Someone’s 11 PM story does not hold up — and the ' + murderRoom.name.replace(/^the /i, '') + ' keeps its secret.';
   game.case = {
     victimName, murderRoomId: murderRoom.id,
-    method: pick(cases.METHODS),
+    method,
     truth, claims, sightings, searchIndex,
     traceInitial: j,
     hint: hintText,
@@ -562,7 +617,8 @@ function searchMenu(game, p) {
   const others = living(game).filter((x) => x !== p);
   others.forEach((o, i) => lines.push('*' + (game.rooms.length + 1 + i) + '* — press ' + o.char.name + ' ' + o.char.title + ' about their account'));
   lines.push('');
-  lines.push('Or reply *SHARE* to lay your latest find on the table (public card).');
+  lines.push('Or reply *SHARE* to pin your latest find to the case board (public).');
+  lines.push('📋 Reply *clipboard* to open your clipboard · *pin <n>* pins a guest beside the clues.');
   lines.push('_In the GROUP: `' + pfx(game) + ' mm press <n>` grills a guest, `' + pfx(game) + ' mm show` shows your find. Whisper to anyone you meet: `note <name> <msg>`._');
   lines.push('_The round ends the moment everyone has acted. ' + timeLabel(Math.max(0, (game.deadline || Date.now()) - Date.now())) + ' remain._');
   return lines.join('\n');
@@ -708,15 +764,19 @@ async function doSearch(game, p, n) {
   const finds = game.case.searchIndex[room.id] || [];
   const doneHere = p.knownClues.filter((c) => c.roomId === room.id).length;
   const find = finds[doneHere];
-  let text;
+  let text, foundClue = null;
   if (find && find.round <= game.round) {
-    const clue = { id: 'E' + (p.knownClues.length + 1) + '·' + room.id, roomId: room.id, roomName: room.name, art: find.art, line: find.line, isTrace: !!find.isTrace, round: game.round, shared: false };
+    const clue = { id: find.cid, cid: find.cid, kind: find.kind, roomId: room.id, roomName: room.name, art: find.art, line: find.line, isTrace: !!find.isTrace,
+      who: find.who || null, whoName: find.whoName || null, slot: find.slot || null, initial: find.initial || null, round: game.round, shared: false };
     p.knownClues.push(clue);
+    foundClue = clue;
+    persist();
     text = '🕯 You search ' + room.name + ' (' + game.round + '): ' + find.line + (find.isTrace ? '\n\n*This changes everything. Reply SHARE to pin it to the board — or hold it close.*' : '\n\nReply *SHARE* to pin it to the case board, or keep it for now.');
   } else {
     text = '🕯 You search ' + room.name + ' (' + game.round + '): ' + pick(cases.SEARCH_NOTHING_LINES || ['Nothing. Dust, shadow, and the sense of being watched.']) + '\n\n_You have acted this round. The round ends when everyone has._';
   }
   await privateText(game, p, text);
+  if (foundClue) await sendClipboardPopup(game, p, foundClue);
   maybeEarlyAdvance(game);
   return true;
 }
@@ -754,10 +814,12 @@ async function doShare(game, p) {
   }
   const clue = unshared[unshared.length - 1];
   clue.shared = true;
+  game.boardClues = game.boardClues || [];
+  if (!game.boardClues.some((b) => b.cid === clue.cid)) game.boardClues.push({ ...clue, shared: true, by: { charId: p.char.id, name: p.char.name } });
   game.notes.push({ kind: clue.isTrace ? 'trace' : 'find', text: clue.roomName + ' · ' + clue.line });
   p.acted = true;
   persist();
-  await privateText(game, p, '📌 Laid on the table for everyone: ' + clue.line);
+  await privateText(game, p, '📌 Pinned to the case board for everyone: ' + clue.line);
   postEvidence(game, p, clue);
   maybeEarlyAdvance(game);
   return true;
@@ -919,9 +981,90 @@ function byNumber(game, n) { const t = game.players[Number(n) - 1]; return t || 
 function rosterLine(game) { return game.players.map((x, i) => (i + 1) + '. ' + x.char.name + (x.alive ? '' : ' ☠')).join(' · '); }
 
 async function postEvidence(game, p, clue) {
-  const card = await ncards.evidenceCard({ art: clue.art, roomName: clue.roomName, line: clue.line, by: { charId: p.char.id, name: p.char.name }, trace: !!clue.isTrace }).catch(() => null);
-  groupMedia(game, stillWrap(card, (clue.isTrace ? '🩸 ' : '📌 ') + '*' + p.char.name + '* lays evidence on the table — ' + clue.roomName + '\n_' + clue.line + '_',
-    '📌 ' + p.char.name + ' lays evidence on the table (' + clue.roomName + '): ' + clue.line));
+  const cap = (clue.isTrace ? '🩸 ' : '📌 ') + '*' + p.char.name + '* pins evidence to the case board — ' + clue.roomName + '\n_' + clue.line + '_\n📋 `' + pfx(game) + ' mm clipboard` opens the board · `' + pfx(game) + ' mm pin <n>` pins a guest beside the clues';
+  const txt = '📌 ' + p.char.name + ' pins evidence to the board (' + clue.roomName + '): ' + clue.line;
+  let buf = null;
+  try { buf = await ncb.renderClipboard(clipboardOpts(game, p, 'shared', clue.cid)); } catch (e) { buf = null; }
+  if (!buf) buf = await ncards.evidenceCard({ art: clue.art, roomName: clue.roomName, line: clue.line, by: { charId: p.char.id, name: p.char.name }, trace: !!clue.isTrace }).catch(() => null);
+  game._lastBoardAt = Date.now();
+  groupMedia(game, stillWrap(buf, cap, txt));
+}
+
+// ---------- clipboard / pins ----------
+function guestCards(game) {
+  return (game.pins || []).map((id) => {
+    const q = game.players.find((x) => x.char && x.char.id === id);
+    if (!q) return null;
+    return { charId: q.char.id, name: q.char.name, title: q.char.title, sprite: q.char.sprite, alive: q.alive, claims: (game.claimsPublic || {})[q.char.id] || null };
+  }).filter(Boolean);
+}
+function boardCluesFor(game, p, includePrivate) {
+  const out = (game.boardClues || []).map((c) => ({ ...c, shared: true }));
+  if (includePrivate && p) for (const c of p.knownClues || []) if (!out.some((o) => o.cid === c.cid)) out.push({ ...c, shared: !!c.shared, by: { charId: p.char.id, name: p.char.name } });
+  return out;
+}
+function clipboardOpts(game, p, mode, highlight) {
+  return {
+    prefix: pfx(game), mode, highlight: highlight || null,
+    victimName: game.case && game.case.victimName, round: game.round, rounds: ROUNDS,
+    viewerName: p && p.char ? p.char.name : null,
+    clues: boardCluesFor(game, p, mode !== 'shared'),
+    pins: guestCards(game),
+  };
+}
+// the big pop-up: DM to the finder the moment they find something
+async function sendClipboardPopup(game, p, clue) {
+  try {
+    const buf = await ncb.renderClipboard(clipboardOpts(game, p, 'popup', clue.cid));
+    const cap = '📋 *NEW CLUE — clipped to your clipboard*\n' + clue.roomName + (clue.slot ? ' · ' + clue.slot : '') + '\n_' + clue.line + '_\n\n' +
+      '• Reply *SHARE* — pin it to the board for the whole table\n• `' + pfx(game) + ' mm clipboard` — open your full clipboard any time\n• `' + pfx(game) + ' mm pin <n>` — pin a guest next to the clues';
+    if (buf) await privateImage(game, p, buf, cap);
+  } catch (e) { console.error('[Noir] clipboard popup failed:', e.message); }
+}
+async function showClipboard(game, p, inGroup) {
+  if (inGroup) {
+    if (Date.now() - (game._lastBoardAt || 0) < 12000) { await privateText(game, p, '📋 The board was just posted above — scroll up, or DM me `clipboard` for your own copy.'); return true; }
+    game._lastBoardAt = Date.now();
+    const buf = await ncb.renderClipboard(clipboardOpts(game, p, 'shared')).catch(() => null);
+    groupMedia(game, stillWrap(buf, '📋 *THE CASE BOARD* — ' + (game.boardClues || []).length + ' clue(s) pinned · ' + (game.pins || []).length + ' guest(s) pinned\n`' + pfx(game) + ' mm pin <n>` pins a guest · `' + pfx(game) + ' mm show` shares a find',
+      '📋 Case board: ' + ((game.boardClues || []).map((c) => c.roomName + ': ' + c.line).join(' | ') || 'nothing pinned yet')));
+    return true;
+  }
+  const buf = await ncb.renderClipboard(clipboardOpts(game, p, 'private')).catch(() => null);
+  if (buf) await privateImage(game, p, buf, '📋 *Your clipboard* — pinned finds plus your private ones (dashed).\nReply *SHARE* to pin your latest · `' + pfx(game) + ' mm pin <n>` pins a guest');
+  else await privateText(game, p, evidenceText(game, p));
+  return true;
+}
+function resolveGuest(game, p, arg) {
+  const raw = String(arg || '').trim();
+  if (!raw) return null;
+  if (/^\d+$/.test(raw)) { const t = byNumber(game, Number(raw)); return t && t !== p ? t : null; }
+  const k = raw.toLowerCase().replace(/[^a-z ]/g, '');
+  return game.players.find((x) => x !== p && x.char && (x.char.name.toLowerCase().includes(k) || x.name.toLowerCase().includes(k))) || null;
+}
+async function doPin(game, p, arg, inGroup) {
+  const t = resolveGuest(game, p, arg);
+  if (!t) { await privateText(game, p, 'Pin who? Use a number from the roster:\n' + rosterLine(game) + '\n`' + pfx(game) + ' mm pin <n>`'); return true; }
+  game.pins = game.pins || [];
+  if (game.pins.includes(t.char.id)) { await privateText(game, p, t.char.name + ' is already pinned to the board.'); return true; }
+  if (game.pins.length >= 4) { await privateText(game, p, 'The board only fits four guests. Unpin one first: `' + pfx(game) + ' mm unpin <n>`'); return true; }
+  game.pins.push(t.char.id);
+  game.notes.push({ kind: 'pin', text: p.char.name + ' pinned ' + t.char.name + ' to the board.' });
+  persist();
+  game._lastBoardAt = Date.now();
+  const buf = await ncb.renderClipboard(clipboardOpts(game, p, 'shared')).catch(() => null);
+  groupMedia(game, stillWrap(buf, '📍 *' + p.char.name + '* pins *' + t.char.name + '* (' + t.char.title + ') beside the clues.\nRed string = what points at them. `' + pfx(game) + ' mm clipboard` shows the board.',
+    '📍 ' + p.char.name + ' pins ' + t.char.name + ' to the case board.'));
+  if (!inGroup) await privateText(game, p, '📍 Pinned ' + t.char.name + ' — the group can see it.');
+  return true;
+}
+async function doUnpin(game, p, arg, inGroup) {
+  const t = resolveGuest(game, p, arg);
+  if (!t || !(game.pins || []).includes(t.char.id)) { await privateText(game, p, 'That guest is not pinned. Pinned now: ' + ((game.pins || []).map((id) => { const q = game.players.find((x) => x.char.id === id); return q ? q.char.name : id; }).join(', ') || 'nobody')); return true; }
+  game.pins = game.pins.filter((id) => id !== t.char.id);
+  persist();
+  groupMedia(game, { text: '📍 ' + p.char.name + ' takes ' + t.char.name + ' off the board.' });
+  return true;
 }
 
 async function doPress(game, p, n) {
@@ -932,6 +1075,8 @@ async function doPress(game, p, n) {
   p.pressed = 1;
   const c10 = game.case.claims[t.char.id]['10 PM'], c11 = game.case.claims[t.char.id]['11 PM'];
   const quote = 'At ten I was in ' + c10.roomName + '. At eleven, ' + c11.roomName + '. Ask anyone.';
+  game.claimsPublic = game.claimsPublic || {};
+  game.claimsPublic[t.char.id] = { '10 PM': c10.roomName, '11 PM': c11.roomName };
   const note = t.char.name + ' swears: 10 PM ' + c10.roomName.replace(/^the /i, '') + ', 11 PM ' + c11.roomName.replace(/^the /i, '') + '.';
   if (!game.notes.some((x) => x.text === note)) game.notes.push({ kind: 'press', text: note });
   persist();
@@ -1084,8 +1229,9 @@ async function relay(sock, senderJid, chatId, txt) {
   const text = String(txt || '').trim();
   if (!text) return false;
   const isMsg = /^(tell|t|note)\s+\S+/i.test(text);
+  const isBoard = /^(clipboard|clip|cb|clues|unpin\s+.+|pin\s+.+)$/i.test(text);
   if (isMsg ? text.length > 260 : text.length > 24) return false;
-  if (!isMsg && !/^(\d{1,2}|[bk]|share(\s+\d+)?|skip)$/i.test(text)) return false;
+  if (!isMsg && !isBoard && !/^(\d{1,2}|[bk]|share(\s+\d+)?|skip)$/i.test(text)) return false;
   const id = normJid(senderJid);
   let game = null;
   for (const g of games.values()) {
@@ -1097,6 +1243,11 @@ async function relay(sock, senderJid, chatId, txt) {
   if (!p || !p.alive) return false;
   try {
     bindContext({ sock }, game);
+    if (isBoard) {
+      const bm = text.match(/^(unpin|pin)\s+(.+)$/i);
+      if (bm) return bm[1].toLowerCase() === 'pin' ? await doPin(game, p, bm[2], false) : await doUnpin(game, p, bm[2], false);
+      return await showClipboard(game, p, false);
+    }
     if (isMsg) return await doMessage(game, p, text);
     if (game.phase === 'SEARCH') {
       const n = Number(text);
@@ -1159,7 +1310,9 @@ function helpText(prefix) {
     '',
     '*In the group (the stage):*',
     '`' + prefix + ' murder press <n>` — grill a guest on their account',
-    '`' + prefix + ' murder show` — lay your latest find on the table',
+    '`' + prefix + ' murder show` — pin your latest find to the case board',
+    '`' + prefix + ' murder clipboard` — open the case board: every pinned clue, strung together by who/where/when',
+    '`' + prefix + ' murder pin <n>` / `unpin <n>` — pin a guest beside the clues (max 4)',
     '`' + prefix + ' murder accuse <n>` — accuse; a majority hangs them on the spot',
     '`' + prefix + ' murder skip` — you are done talking (majority ends the debate)',
     '',
@@ -1202,7 +1355,7 @@ function evidenceText(game, p) {
   const lines = ['🕯 *WHAT YOU HOLD*'];
   for (const c of p.knownClues) lines.push('• [' + (c.shared ? 'pinned' : 'private') + '] ' + c.roomName + ' (' + c.round + '): ' + c.line);
   lines.push('');
-  lines.push('Reply *SHARE* during a search or debate to pin your latest find to the case board.');
+  lines.push('Reply *SHARE* during a search or debate to pin your latest find to the case board. Reply *clipboard* to see them strung together.');
   return lines.join('\n');
 }
 
@@ -1341,7 +1494,10 @@ async function handleCommand(ctx, services) {
 
   // info commands work in any phase
   if (['dossier', 'role', 'me'].includes(action)) return privateText(game, p, dossierText(game, p));
-  if (['evidence', 'journal', 'clues'].includes(action)) return privateText(game, p, evidenceText(game, p));
+  if (['evidence', 'journal'].includes(action)) return privateText(game, p, evidenceText(game, p));
+  if (['clipboard', 'clip', 'cb', 'clues', 'pinboard', 'corkboard', 'casefile'].includes(action)) return showClipboard(game, p, groupContext);
+  if (action === 'pin') return doPin(game, p, arg, groupContext);
+  if (action === 'unpin') return doUnpin(game, p, arg, groupContext);
   if (action === 'board') return sendBoardStill(game, p);
   if (action === 'rooms') return privateText(game, p, game.rooms.map((r, i) => '*' + (i + 1) + '* — ' + r.name + ' — _' + r.hint + '_').join('\n'));
   if (['share', 'show'].includes(action)) return doShare(game, p);
@@ -1427,7 +1583,7 @@ function init(services) {
   loadPersisted();
 }
 
-const PUBLIC_VERBS = ['press', 'ask', 'show', 'accuse', 'skip', 'note', 'tell'];
+const PUBLIC_VERBS = ['press', 'ask', 'show', 'accuse', 'skip', 'note', 'tell', 'pin', 'unpin', 'clipboard', 'clip', 'cb', 'clues'];
 function isVerb(v) { return PUBLIC_VERBS.includes(String(v || '').toLowerCase().replace(/[^a-z]/g, '')); }
 
 module.exports = {
@@ -1459,6 +1615,10 @@ module.exports = {
     dossierText,
     relay,
     DUR,
+    doPin,
+    doUnpin,
+    showClipboard,
+    clipboardOpts,
   },
 };
 
