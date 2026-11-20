@@ -5,6 +5,8 @@ module.exports = { enabled, CFG, handle: (...a) => require('./commands').handle(
 /** `cq ...` typed in ANY chat (group or DM). Replies where the player typed; reminders then follow them there. */
 async function handleChat(sock, chatId, jid, text, prefix = '.') {
     if (!enabled()) return false; const botId = sock && sock.user && String(sock.user.id).split(':')[0].split('@')[0];
+    // deliver anything already due (arrivals, siege rounds, reminders) BEFORE the command runs: the command's own tick would otherwise swallow those events silently
+    try { const k0 = await require('./store').keyFor(jid); if (k0 && /^cq|^conquest/.test(String(text).trim().toLowerCase().replace(/^[.!/#]?\s*(j\s+)?/, ''))) await require('./ticker').tickWar({ eventId: k0 }, sock); } catch (e) { /* best-effort */ }
     const r = await require('./commands').handle({ jid, text, prefix, eventDoc: null, chatId, botId }); if (!r) return false;
     // the bot players are actually talking to must be the one that ticks their war (arrivals / sieges / video notes), or events are consumed by a bot that can't reach the chat
     try { const k = await require('./store').keyFor(jid); if (k) require('./testWar').ensureTicker(sock, k); } catch (e) { /* ticker is best-effort */ }

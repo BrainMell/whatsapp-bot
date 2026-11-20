@@ -152,6 +152,13 @@ function generateRaw(seed) {
                 if (rng() < 0.5) x = Math.max(1, Math.min(W - 2, x + (rng() < 0.5 ? -1 : 1))); else y = Math.max(1, Math.min(H - 2, y + (rng() < 0.5 ? -1 : 1)));
             }
         }
+        // 🎲 STARTER VARIETY: a keep's six neighbours are the first targets everyone sees, so make them different encounters
+        // (village / aether vein / shrine / ruins / fortress) instead of six identical open-ground tiles.
+        { const mix = ['village', 'gem_vein', 'shrine', 'ruins', 'plain', 'fortress'];
+          for (const kp of tiles.values()) { if (kp.realm !== c.key || kp.kind !== 'keep') continue; let mi = 0;
+            for (let d = 0; d < 6; d++) { const [nx, ny] = hexNb(kp.x, kp.y, d); const nt = tiles.get(tileId(c.key, nx, ny)); if (!nt || ['keep', 'ley_gate', 'titan'].includes(nt.kind) || nt.bridge) continue;
+              const want = mix[mi++ % mix.length]; nt.kind = want; nt.name = pick(sc[want]);
+              if (want === 'gem_vein') nt.vein = Math.round(CFG.GEM_VEIN_SUPPLY[0] + rng() * (CFG.GEM_VEIN_SUPPLY[1] - CFG.GEM_VEIN_SUPPLY[0])); } } }
         for (const t of tiles.values()) if (t.realm === c.key) t.defaults = neutralDefences(t, rng);
         realms.push({ key: c.key, name: c.name, biome, epithet: c.epithet, provinces });
     }
