@@ -108,5 +108,34 @@ module.exports = {
         PORT: 3004,
       },
     },
+    {
+      ...APP_BASE,
+      // Joker (2026-11-20): moved from the solo box (84.8.136.110) to this box.
+      name: 'wa-joker',
+      out_file: '~/.pm2/logs/wa-joker-out.log',
+      error_file: '~/.pm2/logs/wa-joker-error.log',
+      env: {
+        NODE_ENV: 'production',
+        BOT_INSTANCE: 'Joker',
+        GLOBAL_SCHEDULERS: '0',
+        START_DELAY_MS: '0',
+        PORT: 3005,
+      },
+    },
+    {
+      ...APP_BASE,
+      // Goten (2026-11-20): swapped onto the solo box (84.8.136.110) in Joker's place.
+      max_memory_restart: '500M',
+      name: 'wa-goten',
+      out_file: '~/.pm2/logs/wa-goten-out.log',
+      error_file: '~/.pm2/logs/wa-goten-error.log',
+      env: {
+        NODE_ENV: 'production',
+        BOT_INSTANCE: 'Goten',
+        GLOBAL_SCHEDULERS: '0',
+        START_DELAY_MS: '0',
+        PORT: 3005,
+      },
+    },
   ],
 };
