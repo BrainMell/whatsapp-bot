@@ -12,7 +12,7 @@
 // Exits non-zero on any failed assertion.
 // ============================================
 
-const REPO = process.argv[2] || '/home/ubuntu/whatsapp-bot';
+const REPO = require('path').resolve(process.argv[2] || process.cwd());
 process.env.MM_NOIR_QA = '1';        // fast phase clocks
 process.env.MM_NOIR_NOCLIP = '1';    // clips return null -> still/text ladder
 
@@ -65,7 +65,7 @@ const lidStub = new Proxy(Object.assign(() => ({}), {}), {
 });
 require.cache[lidMappingPath] = { id: lidMappingPath, filename: lidMappingPath, loaded: true, exports: lidStub };
 // ---- economy stub -----------------------------------------------------------------
-const economyPath = require.resolve(path.join(REPO, 'core', 'rpg', 'economy.js'));
+const economyPath = require.resolve(path.join(REPO, 'core', 'rpg', 'systems', 'economy', 'economy.js'));
 require.cache[economyPath] = {
   id: economyPath, filename: economyPath, loaded: true,
   exports: { getBalance: () => 1000000, removeMoney: () => true, addMoney: () => true, getDisplayName: (j) => 'QA ' + String(j).slice(0, 6) },
