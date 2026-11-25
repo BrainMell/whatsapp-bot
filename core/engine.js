@@ -15181,6 +15181,45 @@ Usage: ${newUsage}/5${warningText}`;
                       }
                     }
 
+                    // 🔒 2026-11-25 VIEW-ONCE TEXT: reveal it as a backgroundless quote sticker
+                    // (same renderer as `.j s` on a text), falling back to plain text.
+                    if (!type || !mediaMsg) {
+                      let voText = "";
+                      try {
+                        const wrapped = extractViewOnce({ message: quotedContent });
+                        const inner = wrapped || quotedContent;
+                        const ext = inner.extendedTextMessage;
+                        if (wrapped || (ext && ext.viewOnce)) {
+                          voText = (ext?.text || inner.conversation || "").trim();
+                        }
+                      } catch (e) { /* not text */ }
+                      if (voText) {
+                        try {
+                          await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
+                          let voJid = null;
+                          try { if (quotedMsg.participant) voJid = jidNormalizedUser(quotedMsg.participant); } catch (e) {}
+                          let voName = null;
+                          try { voName = voJid && getUserProfile(voJid)?.whatsappName; } catch (e) {}
+                          if (!voName && voJid) voName = voJid.split("@")[0];
+                          if (!voName) voName = "Someone";
+                          const { renderQuoteSticker } = require("./utils/quoteSticker");
+                          const voPng = await renderQuoteSticker({ text: voText, name: voName, jid: voJid, sock, dark: false });
+                          const voSticker = new Sticker(voPng, {
+                            pack: system.get(`sticker_pack_name_${BOT_ID}`) || `${botConfig.getBotName()} Pack 🃏`,
+                            author: system.get(`sticker_author_name_${BOT_ID}`) || m.pushName || `${botConfig.getBotName()} User`,
+                            type: StickerTypes.DEFAULT,
+                            quality: 80,
+                          });
+                          await sock.sendMessage(chatId, await voSticker.toMessage(), { quoted: m });
+                          await sock.sendMessage(chatId, { react: { text: "🎭", key: m.key } });
+                        } catch (voErr) {
+                          console.error("View-once text reveal error:", voErr.message);
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + "🎭 *Phantom Thief acquired your secret:*\n\n" + voText }, { quoted: m });
+                        }
+                        return;
+                      }
+                    }
+
                     if (!type || !mediaMsg) {
                       console.log("❌ Not a view-once message");
                       await sock.sendMessage(chatId, {
