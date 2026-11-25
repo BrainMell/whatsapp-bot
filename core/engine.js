@@ -21715,6 +21715,21 @@ ${memberList}`;
                     return;
                   }
 
+                  // 🛠️ 2026-11-25 group tools: gname gdesc link revoke requests approve reject ephemeral addmode approval editinfo ginfo + vo (view-once text)
+                  if (isBotCommand) {
+                    try {
+                      const _gt = await require("./commands/groupTools").handle({
+                        sock, chatId, m, txt, lowerTxt,
+                        prefix: botConfig.getPrefix(),
+                        isGroupChat, canUseAdminCommands,
+                        getGroupMetadata, mark: BOT_MARKER,
+                      });
+                      if (_gt) return;
+                    } catch (_gte) {
+                      console.error("[groupTools]", _gte && _gte.message);
+                    }
+                  }
+
                   // `${botConfig.getPrefix().toLowerCase()}` admintag - silently tag all group admins with a stylised announcement
                   if (
                     (lowerTxt ===
