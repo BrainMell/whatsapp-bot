@@ -110,7 +110,8 @@ module.exports = {
     },
     {
       ...APP_BASE,
-      // Joker (2026-11-20): moved from the solo box (84.8.136.110) to this box.
+      // Joker (2026-11-25): homecoming - back on the solo box, :3006 (goten holds :3005), 500M ceiling.
+      max_memory_restart: '500M',
       name: 'wa-joker',
       out_file: '~/.pm2/logs/wa-joker-out.log',
       error_file: '~/.pm2/logs/wa-joker-error.log',
@@ -119,7 +120,7 @@ module.exports = {
         BOT_INSTANCE: 'Joker',
         GLOBAL_SCHEDULERS: '0',
         START_DELAY_MS: '0',
-        PORT: 3005,
+        PORT: 3006,
       },
     },
     {
