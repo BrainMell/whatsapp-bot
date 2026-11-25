@@ -15536,6 +15536,8 @@ Usage: ${newUsage}/5${warningText}`;
                     const isRot270 = flagPart === "-r3"; // rotate 90° CCW
                     const isFlip = flagPart === "-r4"; // flip horizontal
                     const isSpin = flagPart === "-spin"; // animated slow spin 🌀
+                    // 🔊 2026-11-25 SOUND STICKER: `.j s -a` on a video = animated sticker that plays the clip's audio
+                    const isSoundSticker = flagPart === "-a" || flagPart === "-audio";
 
                     // ── No media attached ─────────────────────────────────────────────────
                     if (!hasImage && !hasVideo) {
@@ -15698,7 +15700,8 @@ Usage: ${newUsage}/5${warningText}`;
                         `▸ \`${p} s -r\`    ⭕ Circle mask\n` +
                         `▸ \`${p} s -bb\`   🌫️ Blurred background\n` +
                         `▸ \`${p} s -n\`    ✨ Neon / hyper-sharp\n` +
-                        `▸ \`${p} s -spin\` 🌀 Slow spin _(animated)_\n\n` +
+                        `▸ \`${p} s -spin\` 🌀 Slow spin _(animated)_\n` +
+                        `▸ \`${p} s -a\`    🔊 Sound sticker _(reply to a video, plays its audio, 10s max)_\n\n` +
                         `*── Rotate / Flip ──*\n` +
                         `▸ \`${p} s -r1\`  🔄 Rotate 90° clockwise\n` +
                         `▸ \`${p} s -r2\`  🔄 Rotate 180°\n` +
@@ -15757,6 +15760,51 @@ Usage: ${newUsage}/5${warningText}`;
                       const outputPath = `./temp/stick_out_${ts}.webp`;
                       if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
                       fs.writeFileSync(inputPath, buffer);
+
+                      // ── 🔊 Sound sticker (-a): video -> animated sticker + its audio track ──
+                      if (isSoundSticker) {
+                        const ss = require("./utils/soundSticker");
+                        let parts = null;
+                        try {
+                          if (type !== "video") throw new Error("not-video");
+                          parts = await ss.convert(inputPath, FFMPEG_PATH, "./temp");
+                        } catch (ssErr) {
+                          if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                          if (ssErr.message === "not-video") {
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + `🔊 Sound stickers need a *video*. Reply to a video with \`${botConfig.getPrefix().toLowerCase()} s -a\`.` }, { quoted: m });
+                          } else throw ssErr;
+                          await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                          return;
+                        }
+                        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+                        const ssPack = system.get(`sticker_pack_name_${BOT_ID}`);
+                        const ssAuthor = system.get(`sticker_author_name_${BOT_ID}`);
+                        const ssProfile = getUserProfile(senderJid);
+                        let ssWebp = parts.webp;
+                        try {
+                          const built = await new Sticker(parts.webp, {
+                            pack: ssPack || `${botConfig.getBotName()} Pack 🃏`,
+                            author: ssAuthor || ssProfile?.whatsappName || m.pushName || `${botConfig.getBotName()} User`,
+                            type: StickerTypes.DEFAULT,
+                            quality: 70,
+                          }).build();
+                          if (built && built.length && built.length <= 1000 * 1024) ssWebp = built;
+                        } catch (e) { /* keep the raw webp (no pack/author exif) */ }
+                        if (!parts.ogg || !parts.ogg.length) {
+                          await sock.sendMessage(chatId, await new Sticker(ssWebp, { pack: ssPack || `${botConfig.getBotName()} Pack 🃏`, author: ssAuthor || m.pushName || "User", type: StickerTypes.DEFAULT, quality: 70 }).toMessage(), { quoted: m });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + "That video has no audio track, so it came out as a normal animated sticker." }, { quoted: m });
+                        } else {
+                          try {
+                            await ss.send(sock, chatId, ssWebp, parts.ogg);
+                          } catch (sendErr) {
+                            console.error("[SoundSticker] send failed, falling back:", sendErr.message);
+                            await sock.sendMessage(chatId, { sticker: ssWebp }, { quoted: m });
+                            await sock.sendMessage(chatId, { text: BOT_MARKER + "Sound sticker failed to send, so here is the silent version." }, { quoted: m });
+                          }
+                        }
+                        await sock.sendMessage(chatId, { react: { text: "🔊", key: m.key } });
+                        return;
+                      }
 
                       // ── Build FFmpeg command ──────────────────────────────────────────────
                       //
