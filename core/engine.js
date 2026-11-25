@@ -15594,7 +15594,7 @@ Usage: ${newUsage}/5${warningText}`;
                           if (b && b.length && b.length <= 1000 * 1024) aWebp = b;
                         } catch (e) { /* keep raw webp */ }
                         try {
-                          await ssA.send(sock, chatId, aWebp, aParts.ogg);
+                          await ssA.send(sock, chatId, aWebp, aParts.ogg, aParts);
                         } catch (sendErr) {
                           console.error("[SoundSticker] audio send failed:", sendErr.message);
                           await sock.sendMessage(chatId, { sticker: aWebp }, { quoted: m });
@@ -15866,7 +15866,7 @@ Usage: ${newUsage}/5${warningText}`;
                           await sock.sendMessage(chatId, { text: BOT_MARKER + "That video has no audio track, so it came out as a normal animated sticker." }, { quoted: m });
                         } else {
                           try {
-                            await ss.send(sock, chatId, ssWebp, parts.ogg);
+                            await ss.send(sock, chatId, ssWebp, parts.ogg, parts);
                           } catch (sendErr) {
                             console.error("[SoundSticker] send failed, falling back:", sendErr.message);
                             await sock.sendMessage(chatId, { sticker: ssWebp }, { quoted: m });

@@ -31,6 +31,28 @@ function sh(cmd) {
   return new Promise((res, rej) => exec(cmd, { timeout: 120000, maxBuffer: 8 * 1024 * 1024 }, (e, so, se) => (e ? rej(new Error(String(se || e.message).slice(-200))) : res(so))));
 }
 
+
+/** 64-bar waveform (0-100) + duration, derived from the opus file, for the audio part */
+async function waveformOf(oggPath, ffmpeg, tmpDir) {
+  const pcmPath = path.join(tmpDir, `ssw_${Date.now()}_${Math.floor(Math.random() * 1e6)}.pcm`);
+  try {
+    await sh(`"${ffmpeg}" -y -loglevel error -i "${oggPath}" -f s16le -ac 1 -ar 8000 "${pcmPath}"`);
+    const pcm = fs.readFileSync(pcmPath);
+    const n = Math.floor(pcm.length / 2);
+    const seconds = Math.max(1, Math.round(n / 8000));
+    const bars = 64; const per = Math.max(1, Math.floor(n / bars)); const raw = [];
+    for (let b = 0; b < bars; b++) {
+      let sum = 0; let cnt = 0;
+      for (let i = b * per; i < Math.min(n, (b + 1) * per); i++) { const v = pcm.readInt16LE(i * 2); sum += v * v; cnt++; }
+      raw.push(cnt ? Math.sqrt(sum / cnt) : 0);
+    }
+    const max = Math.max(...raw, 1);
+    return { seconds, waveform: Uint8Array.from(raw.map((v) => Math.round((v / max) * 100))) };
+  } catch (e) {
+    return { seconds: 5, waveform: Uint8Array.from(new Array(64).fill(40)) };
+  } finally { try { fs.unlinkSync(pcmPath); } catch (e) { /* ignore */ } }
+}
+
 /** video file -> { webp (animated 512x512), ogg (opus, may be empty if the clip has no audio) } */
 async function convert(inputPath, ffmpeg, tmpDir) {
   const id = Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -50,7 +72,8 @@ async function convert(inputPath, ffmpeg, tmpDir) {
       await sh(`"${ffmpeg}" -y -loglevel error -i "${inputPath}" -t ${MAX_AUDIO_SEC} -vn -ac 1 -ar 48000 -c:a libopus -b:a 48k -vbr on -compression_level 10 -frame_duration 20 -avoid_negative_ts make_zero "${oggPath}"`);
       if (fs.existsSync(oggPath)) ogg = fs.readFileSync(oggPath);
     } catch (e) { /* clip has no audio track */ }
-    return { webp, ogg };
+    const meta = ogg.length ? await waveformOf(oggPath, ffmpeg, tmpDir) : {};
+    return { webp, ogg, ...meta };
   } finally {
     for (const f of [webpPath, oggPath]) { try { fs.unlinkSync(f); } catch (e) { /* ignore */ } }
   }
@@ -65,6 +88,7 @@ async function convertAudio(inputPath, ffmpeg, tmpDir) {
   try {
     await sh(`"${ffmpeg}" -y -loglevel error -i "${inputPath}" -t ${MAX_AUDIO_SEC} -vn -ac 1 -ar 48000 -c:a libopus -b:a 48k -vbr on -compression_level 10 -frame_duration 20 -avoid_negative_ts make_zero "${oggPath}"`);
     const ogg = fs.readFileSync(oggPath);
+    const meta = await waveformOf(oggPath, ffmpeg, tmpDir);
     // moving waveform, black keyed out so the sticker has no background
     const fc = "[0:a]aformat=channel_layouts=mono,showwaves=s=512x512:mode=cline:rate=15:colors=0xffd24a,format=rgba,colorkey=0x000000:0.12:0.1[v]";
     let webp = null;
@@ -73,7 +97,7 @@ async function convertAudio(inputPath, ffmpeg, tmpDir) {
       webp = fs.readFileSync(webpPath);
       if (webp.length <= MAX_WEBP) break;
     }
-    return { webp, ogg };
+    return { webp, ogg, ...meta };
   } finally {
     for (const f of [webpPath, oggPath]) { try { fs.unlinkSync(f); } catch (e) { /* ignore */ } }
   }
@@ -121,16 +145,23 @@ async function patchProto() {
   return true;
 }
 
-/** upload webp + ogg and relay one sound sticker. Throws on any failure. */
-async function send(sock, chatId, webp, ogg) {
+/**
+ * Upload webp + ogg and relay one sound sticker. Throws on any failure.
+ * Shape copied from the phone-verified zapota implementation: ONLY the 134 wrapper (no
+ * top-level sticker - a top-level stickerMessage makes the phone render a plain sticker),
+ * a messageSecret, ptt audio with seconds+waveform, sticker width/height/isLottie.
+ */
+async function send(sock, chatId, webp, ogg, meta = {}) {
   if (!(await patchProto())) throw new Error('baileys proto not patchable');
   const { prepareWAMessageMedia, proto } = await import('@whiskeysockets/baileys');
   const upload = sock.waUploadToServer;
   const ps = await prepareWAMessageMedia({ sticker: webp }, { upload, logger: LOG });
   const pa = await prepareWAMessageMedia({ audio: ogg }, { upload, logger: LOG });
   const st = ps.stickerMessage; const au = pa.audioMessage;
-  st.mimetype = 'image/webp'; st.isAnimated = true;
-  au.mimetype = 'audio/ogg; codecs=opus'; au.ptt = false;
+  st.mimetype = 'image/webp'; st.isAnimated = true; st.isLottie = false; st.width = 512; st.height = 512;
+  au.mimetype = 'audio/ogg; codecs=opus'; au.ptt = true;
+  if (meta.seconds) au.seconds = meta.seconds;
+  if (meta.waveform) au.waveform = meta.waveform;
 
   const audioBytes = Uint8Array.from(proto.Message.AudioMessage.encode(au).finish());
   st.__ssAudio = [{ tag: (26 << 3) | 2, bytes: audioBytes }];
@@ -138,9 +169,8 @@ async function send(sock, chatId, webp, ogg) {
 
   // 134 -> FutureProofMessage{ message(1) -> Message{ stickerMessage(26) } }
   const fpm = field(1, field(26, stickerBytes));
-  const outer = proto.Message.create({});
-  outer.stickerMessage = st;                                   // keeps mediatype=sticker + silent fallback
-  outer.__ssWrapper = { tag: (134 << 3) | 2, bytes: fpm };     // the sound-sticker envelope
+  const outer = proto.Message.create({ messageContextInfo: { messageSecret: crypto.randomBytes(32) } });
+  outer.__ssWrapper = { tag: (134 << 3) | 2, bytes: fpm };
   const messageId = '3EB0' + crypto.randomBytes(10).toString('hex').toUpperCase();
   await sock.relayMessage(chatId, outer, { messageId });
   return messageId;
