@@ -15204,13 +15204,8 @@ Usage: ${newUsage}/5${warningText}`;
                           if (!voName) voName = "Someone";
                           const { renderQuoteSticker } = require("./utils/quoteSticker");
                           const voPng = await renderQuoteSticker({ text: voText, name: voName, jid: voJid, sock, dark: false });
-                          const voSticker = new Sticker(voPng, {
-                            pack: system.get(`sticker_pack_name_${BOT_ID}`) || `${botConfig.getBotName()} Pack 🃏`,
-                            author: system.get(`sticker_author_name_${BOT_ID}`) || m.pushName || `${botConfig.getBotName()} User`,
-                            type: StickerTypes.DEFAULT,
-                            quality: 80,
-                          });
-                          await sock.sendMessage(chatId, await voSticker.toMessage(), { quoted: m });
+                          // sent as an IMAGE (not a sticker), same quote-card style, transparent PNG
+                          await sock.sendMessage(chatId, { image: voPng, mimetype: "image/png", caption: BOT_MARKER + "🎭 *Phantom Thief acquired your secret.*" }, { quoted: m });
                           await sock.sendMessage(chatId, { react: { text: "🎭", key: m.key } });
                         } catch (voErr) {
                           console.error("View-once text reveal error:", voErr.message);
