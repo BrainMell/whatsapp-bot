@@ -56,6 +56,29 @@ async function convert(inputPath, ffmpeg, tmpDir) {
   }
 }
 
+
+/** audio file (voice note / song clip) -> { webp: animated transparent waveform, ogg } */
+async function convertAudio(inputPath, ffmpeg, tmpDir) {
+  const id = Date.now() + '_' + Math.floor(Math.random() * 1e6);
+  const webpPath = path.join(tmpDir, `ssa_${id}.webp`);
+  const oggPath = path.join(tmpDir, `ssa_${id}.ogg`);
+  try {
+    await sh(`"${ffmpeg}" -y -loglevel error -i "${inputPath}" -t ${MAX_AUDIO_SEC} -vn -ac 1 -ar 48000 -c:a libopus -b:a 48k -vbr on -compression_level 10 -frame_duration 20 -avoid_negative_ts make_zero "${oggPath}"`);
+    const ogg = fs.readFileSync(oggPath);
+    // moving waveform, black keyed out so the sticker has no background
+    const fc = "[0:a]aformat=channel_layouts=mono,showwaves=s=512x512:mode=cline:rate=15:colors=0xffd24a,format=rgba,colorkey=0x000000:0.12:0.1[v]";
+    let webp = null;
+    for (const q of [45, 30, 20]) {
+      await sh(`"${ffmpeg}" -y -loglevel error -i "${inputPath}" -t ${MAX_AUDIO_SEC} -filter_complex "${fc}" -map "[v]" -loop 0 -c:v libwebp -lossless 0 -preset picture -compression_level 4 -q:v ${q} -vsync 0 "${webpPath}"`);
+      webp = fs.readFileSync(webpPath);
+      if (webp.length <= MAX_WEBP) break;
+    }
+    return { webp, ogg };
+  } finally {
+    for (const f of [webpPath, oggPath]) { try { fs.unlinkSync(f); } catch (e) { /* ignore */ } }
+  }
+}
+
 // ---- protobuf plumbing ----------------------------------------------------
 let _patched = false;
 const cat = (a, b) => { const o = new Uint8Array(a.length + b.length); o.set(a, 0); o.set(b, a.length); return o; };
@@ -123,4 +146,4 @@ async function send(sock, chatId, webp, ogg) {
   return messageId;
 }
 
-module.exports = { convert, send, patchProto, MAX_AUDIO_SEC, MAX_VIDEO_SEC };
+module.exports = { convert, convertAudio, send, patchProto, MAX_AUDIO_SEC, MAX_VIDEO_SEC };

@@ -15573,6 +15573,43 @@ Usage: ${newUsage}/5${warningText}`;
                     // 🔊 2026-11-25 SOUND STICKER: `.j s -a` on a video = animated sticker that plays the clip's audio
                     const isSoundSticker = flagPart === "-a" || flagPart === "-audio";
 
+                    // 🔊 `.j s -a` replying to a VOICE NOTE / audio: moving transparent waveform + that audio as a sound sticker
+                    if (isSoundSticker && mediaMsg?.audioMessage) {
+                      const ssA = require("./utils/soundSticker");
+                      const aIn = `./temp/ssa_in_${Date.now()}_${Math.floor(Math.random() * 1000)}.ogg`;
+                      try {
+                        await sock.sendMessage(chatId, { react: { text: "⏳", key: m.key } });
+                        if (!fs.existsSync("./temp")) fs.mkdirSync("./temp");
+                        const aBuf = await downloadMediaMessage(isReply ? { message: quotedMsg } : m, "buffer", {}, { logger: console, reuploadRequest: sock.updateMediaMessage });
+                        if (!aBuf || !aBuf.length) throw new Error("Empty audio buffer");
+                        fs.writeFileSync(aIn, aBuf);
+                        const aParts = await ssA.convertAudio(aIn, FFMPEG_PATH, "./temp");
+                        let aWebp = aParts.webp;
+                        try {
+                          const b = await new Sticker(aParts.webp, {
+                            pack: system.get(`sticker_pack_name_${BOT_ID}`) || `${botConfig.getBotName()} Pack 🃏`,
+                            author: system.get(`sticker_author_name_${BOT_ID}`) || m.pushName || `${botConfig.getBotName()} User`,
+                            type: StickerTypes.DEFAULT, quality: 70,
+                          }).build();
+                          if (b && b.length && b.length <= 1000 * 1024) aWebp = b;
+                        } catch (e) { /* keep raw webp */ }
+                        try {
+                          await ssA.send(sock, chatId, aWebp, aParts.ogg);
+                        } catch (sendErr) {
+                          console.error("[SoundSticker] audio send failed:", sendErr.message);
+                          await sock.sendMessage(chatId, { sticker: aWebp }, { quoted: m });
+                          await sock.sendMessage(chatId, { text: BOT_MARKER + "Sound sticker failed to send, so here is the silent version." }, { quoted: m });
+                        }
+                        await sock.sendMessage(chatId, { react: { text: "🔊", key: m.key } });
+                      } catch (aErr) {
+                        console.error("Audio sticker error:", aErr.message);
+                        await sock.sendMessage(chatId, { react: { text: "❌", key: m.key } });
+                      } finally {
+                        try { if (fs.existsSync(aIn)) fs.unlinkSync(aIn); } catch (e) {}
+                      }
+                      return;
+                    }
+
                     // ── No media attached ─────────────────────────────────────────────────
                     if (!hasImage && !hasVideo) {
                       // 💡 QUOTE STICKER (2026-10-13): `.j s` replying to a TEXT message
@@ -15735,7 +15772,7 @@ Usage: ${newUsage}/5${warningText}`;
                         `▸ \`${p} s -bb\`   🌫️ Blurred background\n` +
                         `▸ \`${p} s -n\`    ✨ Neon / hyper-sharp\n` +
                         `▸ \`${p} s -spin\` 🌀 Slow spin _(animated)_\n` +
-                        `▸ \`${p} s -a\`    🔊 Sound sticker _(reply to a video, plays its audio, 10s max)_\n\n` +
+                        `▸ \`${p} s -a\`    🔊 Sound sticker _(reply to a video OR a voice note, 10s of sound max)_\n\n` +
                         `*── Rotate / Flip ──*\n` +
                         `▸ \`${p} s -r1\`  🔄 Rotate 90° clockwise\n` +
                         `▸ \`${p} s -r2\`  🔄 Rotate 180°\n` +
