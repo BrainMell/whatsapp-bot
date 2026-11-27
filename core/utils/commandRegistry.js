@@ -70,6 +70,7 @@ const COMMAND_REGISTRY = {
     { cmd: 'addmode', desc: 'Choose who can add members (admins).', usage: 'addmode all|admins' },
     { cmd: 'approval', desc: 'Require admin approval for new joiners (admins).', usage: 'approval on/off' },
     { cmd: 'editinfo', desc: 'Choose who can edit group name/icon/description (admins).', usage: 'editinfo admins|all' },
+    { cmd: 'gtheme', desc: 'Set a chat theme color for everyone in the group (admins).', usage: 'gtheme <color> | gtheme reset' },
     { cmd: 'ginfo', desc: 'Show group info: members, admins, settings.', usage: 'ginfo' },
     { cmd: 'vo', desc: 'Send text as a view-once message (experimental).', usage: 'vo <text>' },
     { cmd: 'announce', desc: 'Toggle admin promote/demote announcements.', usage: 'announce on/off' },
