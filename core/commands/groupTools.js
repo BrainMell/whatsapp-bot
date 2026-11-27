@@ -47,12 +47,20 @@ async function patchProtocol() {
   return true;
 }
 
-async function sendTheme(sock, chatId, { rgb, clear, doodle }) {
+async function sendTheme(sock, chatId, { rgb, clear, doodle, image }) {
   if (!(await patchProtocol())) throw new Error('baileys proto not patchable');
   const { proto } = await import('@whiskeysockets/baileys');
   let cts = _cat(new Uint8Array(0), _cat(_vi((1 << 3) | 0), _vi(Date.now())));          // settingTimestampMS
   if (clear) cts = _cat(cts, _bool(2, true));                                            // clearTheme
-  else {
+  else if (image) {
+    const f32 = (tag, v) => { const b = new Uint8Array(5); b[0] = (tag << 3) | 5; new DataView(b.buffer).setFloat32(1, v, true); return b; };
+    let ci = _ld(1, Buffer.from(image.directPath, 'utf8'));
+    ci = _cat(ci, _ld(2, Uint8Array.from(image.mediaKey)));
+    ci = _cat(ci, _ld(3, Uint8Array.from(image.fileEncSha256)));
+    ci = _cat(ci, _ld(4, Uint8Array.from(image.fileSha256)));
+    ci = _cat(ci, f32(5, image.dim));
+    cts = _cat(cts, _ld(13, ci));                                                         // customImage
+  } else {
     const solid = _cat(_cat(_fx32(1, argb(rgb)), _fx32(2, argb(shade(rgb, 0.45)))), _bool(3, !!doodle));
     cts = _cat(cts, _ld(11, solid));                                                      // solidColor
   }
@@ -212,8 +220,28 @@ async function handle(c) {
     }
     if (word === 'gtheme') {
       const a = args.trim().toLowerCase();
+      // image background: caption an image with `gtheme` (or reply to an image with it)
+      const mm = m.message || {};
+      const flat = mm.ephemeralMessage?.message || mm.viewOnceMessage?.message || mm.viewOnceMessageV2?.message || mm;
+      const qraw = flat.extendedTextMessage?.contextInfo?.quotedMessage || flat.imageMessage?.contextInfo?.quotedMessage;
+      const q = qraw?.ephemeralMessage?.message || qraw?.viewOnceMessage?.message || qraw?.viewOnceMessageV2?.message || qraw;
+      const imgHolder = flat.imageMessage ? { message: flat } : (q && q.imageMessage ? { message: q } : null);
+      if (imgHolder && !/^(reset|default|clear|off)$/.test(a)) {
+        await react('⏳');
+        const dm = a.match(/\bdim\s*(\d{1,3})\b/);
+        const dim = Math.min(1, Math.max(0, (dm ? Number(dm[1]) : 30) / 100));
+        const { downloadMediaMessage, prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
+        const raw = await downloadMediaMessage(imgHolder, 'buffer', {}, { logger: { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, child() { return this; } }, reuploadRequest: sock.updateMediaMessage });
+        let buf = raw;
+        try { buf = await require('sharp')(raw).rotate().resize(1080, 1920, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer(); } catch (e) { /* use original */ }
+        const prep = await prepareWAMessageMedia({ image: buf }, { upload: sock.waUploadToServer, logger: { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, child() { return this; } } });
+        const im = prep.imageMessage;
+        await sendTheme(sock, chatId, { image: { directPath: im.directPath, mediaKey: im.mediaKey, fileEncSha256: im.fileEncSha256, fileSha256: im.fileSha256, dim } });
+        await react('🖼️');
+        return true;
+      }
       if (!a) {
-        await say(`🎨 *Group theme for everyone*\n\`${prefix} gtheme <color>\` - e.g. red, navy, gold, or a hex like #8b0a1a\n\`${prefix} gtheme <color> doodle\` - keep the chat doodles\n\`${prefix} gtheme reset\` - back to default\n\n_Needs members on the 2026 shared-themes update; they may get an accept prompt._`);
+        await say(`🖼️ *Group background for everyone*\nSend an image with the caption \`${prefix} gtheme\` (or reply to an image with it). Add \`dim 50\` to darken it (0-100, default 30).\n\n🎨 *Solid colors*\n\`${prefix} gtheme <color>\` - e.g. red, navy, gold, or a hex like #8b0a1a\n\`${prefix} gtheme <color> doodle\` - keep the chat doodles\n\`${prefix} gtheme reset\` - back to default\n\n_Needs members on the 2026 shared-themes update; they may get an accept prompt._`);
         return true;
       }
       if (/^(reset|default|clear|off)$/.test(a)) { await sendTheme(sock, chatId, { clear: true }); await react('✅'); return true; }
@@ -252,4 +280,4 @@ async function handle(c) {
   return false;
 }
 
-module.exports = { handle };
+module.exports = { handle, sendTheme };
