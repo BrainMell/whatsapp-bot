@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+// 🩹 2026-11-27 Baileys runtime patch (shared chat themes) - must run before Baileys is first required
+try { const _bp = require('./core/utils/baileysPatch').apply(); if (_bp !== 'already') console.log('[baileysPatch]', _bp); } catch (e) { /* never block boot */ }
+
 // Force IPv4 first to eliminate 60-90s IPv6 connection hangs on WhatsApp servers
 const dns = require('dns');
 try { dns.setDefaultResultOrder('ipv4first'); } catch (e) {}

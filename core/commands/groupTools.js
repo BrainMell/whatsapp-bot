@@ -69,7 +69,7 @@ async function sendTheme(sock, chatId, { rgb, clear, doodle, image }) {
   const outer = proto.Message.create({});
   outer.protocolMessage = pm;
   const id = '3EB0' + crypto.randomBytes(10).toString('hex').toUpperCase();
-  await sock.relayMessage(chatId, outer, { messageId: id });
+  await sock.relayMessage(chatId, outer, { messageId: id, additionalAttributes: { type: 'media' } });
   return id;
 }
 
@@ -230,13 +230,22 @@ async function handle(c) {
         await react('⏳');
         const dm = a.match(/\bdim\s*(\d{1,3})\b/);
         const dim = Math.min(1, Math.max(0, (dm ? Number(dm[1]) : 30) / 100));
-        const { downloadMediaMessage, prepareWAMessageMedia } = await import('@whiskeysockets/baileys');
-        const raw = await downloadMediaMessage(imgHolder, 'buffer', {}, { logger: { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, child() { return this; } }, reuploadRequest: sock.updateMediaMessage });
+        const bw = await import('@whiskeysockets/baileys');
+        const silent = { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, child() { return this; } };
+        const raw = await bw.downloadMediaMessage(imgHolder, 'buffer', {}, { logger: silent, reuploadRequest: sock.updateMediaMessage });
         let buf = raw;
         try { buf = await require('sharp')(raw).rotate().resize(1080, 1920, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer(); } catch (e) { /* use original */ }
-        const prep = await prepareWAMessageMedia({ image: buf }, { upload: sock.waUploadToServer, logger: { level: 'silent', trace() {}, debug() {}, info() {}, warn() {}, error() {}, child() { return this; } } });
-        const im = prep.imageMessage;
-        await sendTheme(sock, chatId, { image: { directPath: im.directPath, mediaKey: im.mediaKey, fileEncSha256: im.fileEncSha256, fileSha256: im.fileSha256, dim } });
+        // wallpapers have their own media type: upload path /mms/chat-wallpaper-image, HKDF info "Chat Wallpaper"
+        bw.MEDIA_PATH_MAP['chat-wallpaper-image'] = '/mms/chat-wallpaper-image';
+        bw.MEDIA_HKDF_KEY_MAPPING['chat-wallpaper-image'] = 'Chat Wallpaper';
+        const enc = await bw.encryptedStream(buf, 'chat-wallpaper-image', { logger: silent });
+        let directPath;
+        try {
+          const up = await sock.waUploadToServer(enc.encFilePath, { mediaType: 'chat-wallpaper-image', fileEncSha256B64: enc.fileEncSha256.toString('base64') });
+          directPath = up && up.directPath;
+        } finally { try { require('fs').unlinkSync(enc.encFilePath); } catch (e) { /* ignore */ } }
+        if (!directPath) throw new Error('wallpaper upload returned no directPath');
+        await sendTheme(sock, chatId, { image: { directPath, mediaKey: enc.mediaKey, fileEncSha256: enc.fileEncSha256, fileSha256: enc.fileSha256, dim } });
         await react('🖼️');
         return true;
       }
