@@ -22,7 +22,7 @@
 const botConfig = require('../../botConfig');
 const system = require('./system');
 
-const gcOwners = new Map(); // chatId -> stored JID (as marked)
+const gcOwners = new Map(); // chatId -> [primary JID, ...every alias the group roster knew for them]
 
 // NOTE: system.js also exports get/getFresh lazily used in loadGcOwners.
 void system;
@@ -37,7 +37,7 @@ async function loadGcOwners() {
     const data = await system.getFresh('_shared_gc_owners', null) ?? system.get('_shared_gc_owners', null);
     if (data && typeof data === 'object') {
       for (const [chat, jid] of Object.entries(data)) {
-        if (chat && jid) gcOwners.set(chat, jid);
+        if (chat && jid) gcOwners.set(chat, Array.isArray(jid) ? jid.filter(Boolean) : [jid]);
       }
     }
     console.log(`👑 [${botConfig.getBotId()}] Loaded ${gcOwners.size} marked GC owner(s)`);
@@ -57,8 +57,12 @@ function _normJidSafe(u) {
   } catch (e) { return u; }
 }
 
-async function setGcOwner(chatId, userId) {
-  gcOwners.set(chatId, _normJidSafe(userId));
+// aliases: other JID forms of the same person (LID / phone / device forms taken from the
+// group roster at marking time). Without them the mark silently fails whenever the LID<->phone
+// mapping is not cached and the person speaks under the other form.
+async function setGcOwner(chatId, userId, aliases = []) {
+  const all = [_normJidSafe(userId), ...aliases.map(_normJidSafe)].filter((x) => typeof x === 'string' && x);
+  gcOwners.set(chatId, [...new Set(all)]);
   await saveGcOwners();
 }
 
@@ -69,27 +73,31 @@ async function clearGcOwner(chatId) {
 }
 
 function getGcOwner(chatId) {
-  return gcOwners.get(chatId) || null;
+  const v = gcOwners.get(chatId);
+  return (Array.isArray(v) ? v[0] : v) || null;
 }
 
-// Immunity check - LID/phone/device-suffix safe via canonicalRankKey.
-function isGcOwner(userId, chatId) {
-  if (!userId || !chatId) return false;
-  const stored = gcOwners.get(chatId);
-  if (!stored) return false;
+function _sameUser(userId, stored) {
   try {
     const lidResolver = require('./lidResolver');
     const a = lidResolver.canonicalRankKey(userId);
     const b = lidResolver.canonicalRankKey(stored);
     if (a && a === b) return true;
-    // Final fallback: same-domain user-part equality (covers odd suffixes
-    // canonicalRankKey leaves untouched).
     const pa = String(a || '').split('@');
     const pb = String(b || '').split('@');
     return pa[0] === pb[0] && pa[1] === pb[1];
   } catch (err) {
     return _normJidSafe(userId) === _normJidSafe(stored);
   }
+}
+
+// Immunity check - LID/phone/device-suffix safe via canonicalRankKey, against EVERY stored alias.
+function isGcOwner(userId, chatId) {
+  if (!userId || !chatId) return false;
+  const v = gcOwners.get(chatId);
+  if (!v) return false;
+  const list = Array.isArray(v) ? v : [v];
+  return list.some((stored) => _sameUser(userId, stored));
 }
 
 module.exports = {

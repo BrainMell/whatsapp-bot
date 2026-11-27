@@ -6001,6 +6001,8 @@ What to do:
 
     // ✅ FIXED: Check if user is muted and auto-cleanup expired mutes
     function isMuted(userId, chatId) {
+      // 👑 the marked GC owner can never be muted, even by a mute record that already existed
+      if (isGcOwner(userId, chatId)) return false;
       const key = getMuteKey(userId, chatId);
       if (!mutedUsers.has(key)) return false;
 
@@ -9491,7 +9493,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                           if (__gsResolved) __gsPhone = jidNormalizedUser(__gsResolved);
                         } catch (_) {}
                         const __gsAllowed = isOwner || __gsStatusModeration.isAllowedGroupStatusAuthor(__gsAuthor, __gsPhone, { isOwner: _isBotOwner, isGlobalMod });
-                        if (!__gsAllowed) {
+                        if (!__gsAllowed && !isGcOwner(__gsAuthor, chatId) && !isGcOwner(__gsRawAuthor || "", chatId)) {
                           const __gsStatusKey = __gsStatusModeration.buildGroupStatusRevokeKey(m.key, chatId, __gsRawAuthor);
                           const __gsResult = await __gsStatusModeration.revokeGroupStatus(sock, chatId, __gsStatusKey);
                           console.log("[GStatusAutoMod] rejected author=" + (__gsAuthor || "unknown") + " in " + chatId + " revoked=" + __gsResult.ok + " method=" + (__gsResult.method || "none") + (__gsResult.error ? " error=" + __gsResult.error : ""));
@@ -9623,7 +9625,7 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
                   // the bot's JID in LID format, and resolveToPhone may not always map it
                   // correctly. WhatsApp will return an error if the bot isn't admin, which
                   // we catch silently. Better to try and fail than to skip the delete entirely.
-                  if (isGroupChat && isHardMuted(senderJid)) {
+                  if (isGroupChat && isHardMuted(senderJid) && !isGcOwner(senderJid, chatId)) {
                     // Don't delete the bot's own messages or protocol messages
                     if (!m.key.fromMe && !m.message?.protocolMessage) {
                       // 💡 Enhanced logging (2026-08-14): log the message key structure
@@ -21079,7 +21081,18 @@ Members are assigned to Rank Tiers (1 to 5).
                       });
                     }
 
-                    await setGcOwner(chatId, target);
+                    // collect every JID form the roster knows for this person (LID + phone + device forms)
+                    const _gcAliases = [];
+                    try {
+                      const _md = await getGroupMetadata(chatId);
+                      const _canon = (x) => { try { return require("./utils/lidResolver").canonicalRankKey(x); } catch (e) { return x; } };
+                      const _tc = _canon(target);
+                      for (const _p of (_md && _md.participants) || []) {
+                        const forms = [_p.id, _p.lid, _p.phoneNumber, _p.jid].filter((x) => typeof x === "string" && x);
+                        if (forms.some((f) => f === target || _canon(f) === _tc)) _gcAliases.push(...forms);
+                      }
+                    } catch (e) { /* aliases are best-effort */ }
+                    await setGcOwner(chatId, target, _gcAliases);
                     // Clearing any live mute in THIS group - a protected
                     // owner must not stay muted from before the mark.
                     unmuteUser(target, chatId);
