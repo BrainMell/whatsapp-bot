@@ -21805,6 +21805,15 @@ ${memberList}`;
                     return;
                   }
 
+                  // 🀄 2026-11-28 Mahjong solitaire: `.j mj ...` commands, plus plain "87 112" moves while the sender has a game running
+                  try {
+                    const _mj = require("./games/mahjong");
+                    const _mjCtx = { sock, chatId, m, txt, lowerTxt, prefix: botConfig.getPrefix(), senderJid, mark: BOT_MARKER };
+                    if (isBotCommand ? await _mj.handle(_mjCtx) : (!m.key.fromMe && _mj.wantsPlain(chatId, senderJid, txt) && (await _mj.handlePlain(_mjCtx)))) return;
+                  } catch (_mje) {
+                    console.error("[mahjong]", _mje && _mje.message);
+                  }
+
                   // 🛠️ 2026-11-25 group tools: gname gdesc link revoke requests approve reject ephemeral addmode approval editinfo ginfo + vo (view-once text)
                   if (isBotCommand) {
                     try {
