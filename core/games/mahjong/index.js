@@ -148,7 +148,7 @@ async function playPairs(c, g, nums) {
   if (done.length === 1 && lastClip) {
     try {
       const mp4 = await R.matchClip(lastClip.before, lastClip.bA, lastClip.bB, info(g), lastClip.gain);
-      await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, mimetype: 'video/mp4' }, { quoted: m }); return;
+      await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m }); return;
     } catch (e) { console.error('[mahjong] clip failed:', e && e.message); }
   }
   await sendBoard(c, g, cap);
@@ -164,7 +164,7 @@ async function start(c, name) {
   const g = { tiles: T.newDeal(), name, score: 0, moves: 0, combo: 0, lastAt: 0, stack: [], shuffles: 0, startedAt: Date.now(), touched: Date.now(), hint: null };
   games.set(key(chatId, senderJid), g);
   const cap = `🀄 *Mahjong Solitaire* - ${name}\nMatch two *free* tiles (gold number). Send the numbers: \`${prefix} mj 87 112\` or just \`87 112\`.\n\`${prefix} mj help\` for hints, undo & rules.`;
-  try { const mp4 = await R.dealClip(g.tiles, info(g)); g.startedAt = Date.now(); await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, mimetype: 'video/mp4' }, { quoted: m }); }
+  try { const mp4 = await R.dealClip(g.tiles, info(g)); g.startedAt = Date.now(); await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m }); }
   catch (e) { console.error('[mahjong] deal clip failed:', e && e.message); await sendBoard(c, g, cap); }
 }
 
@@ -173,7 +173,7 @@ async function doShuffle(c, g, caption) {
   const before = g.tiles.map((t) => ({ ...t }));
   if (!T.reshuffleAlive(g.tiles)) { await sock.sendMessage(chatId, { text: mark + '⚠️ Could not reshuffle.' }, { quoted: m }); return; }
   g.shuffles += 1; g.stack = []; g.hint = null;
-  try { const mp4 = await R.shuffleClip(before, g.tiles, info(g)); await sock.sendMessage(chatId, { video: mp4, caption: mark + caption, mimetype: 'video/mp4' }, { quoted: m }); }
+  try { const mp4 = await R.shuffleClip(before, g.tiles, info(g)); await sock.sendMessage(chatId, { video: mp4, caption: mark + caption, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m }); }
   catch (e) { await sendBoard(c, g, caption); }
 }
 async function reshuffleIfStuck(c, g, lead = '') {
@@ -195,7 +195,7 @@ async function win(c, g) {
   try { const economy = require('../rpg/systems/economy/economy'); economy.addMoney(senderJid, zeni, 'Mahjong clear'); } catch (e) { zeni = 0; }
   const lines = [`${g.name}  -  ${fmt(s)}  -  ${g.moves} moves`, `Score ${g.score}  (time bonus +${bonus})${pb ? '  - new best time!' : ''}`];
   const cap = `🏆 *BOARD CLEARED!* ${g.name}\n⏱ ${fmt(s)} · 🎯 ${g.moves} moves · ⭐ ${g.score} pts${zeni ? `\n💰 +${zeni} Zeni` : ''}${pb ? '\n🥇 New personal best time!' : ''}\n\`${prefix} mj\` to play again · \`${prefix} mj top\``;
-  try { const mp4 = await R.winClip({ sub: g.name, left: 0, score: g.score, moves: g.moves, time: fmt(s) }, lines); await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, mimetype: 'video/mp4' }, { quoted: m }); }
+  try { const mp4 = await R.winClip({ sub: g.name, left: 0, score: g.score, moves: g.moves, time: fmt(s) }, lines); await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m }); }
   catch (e) { await sock.sendMessage(chatId, { text: mark + cap }, { quoted: m }); }
 }
 
