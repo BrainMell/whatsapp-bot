@@ -920,7 +920,7 @@ async function cmdTo(ctx, rec, args) {
     return viewRoom(ctx, rec, { ...gridOptsFor(p, d), pop: { item: p.item, x: best.x, y: best.y, from }, hint: `The *${d.name}* is in the ${SPACE_NAME[target]} now (${best.x},${best.y}).` });
 }
 
-async function cmdRotate(ctx, rec) {
+async function cmdRotate(ctx, rec, args) {
     const selUid = selGet(ctx.senderJid);
     if (selUid === 'EXPIRED') return ctx.reply(`⏱️ Selection expired (holds 5 min) — pick the piece again: \`${ctx.prefix} home select <number|name>\`.`);
     if (!selUid) return ctx.reply(`Select a piece first: \`${ctx.prefix} home select <name>\`.`);
@@ -1300,7 +1300,7 @@ async function handleCommand(ctx) {
             case 'moveto': case 'goto': case 'send':
                 return cmdMoveTo(ctx, rec, args);
             case 'rotate': case 'turn': case 'flip':
-                return cmdRotate(ctx, rec);
+                return cmdRotate(ctx, rec, args);
             case 'deselect': case 'unselect':
                 setSelectionMode(ctx.senderJid, false);
                 selClear(ctx.senderJid);

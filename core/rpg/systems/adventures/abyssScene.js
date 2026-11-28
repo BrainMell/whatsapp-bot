@@ -1840,23 +1840,6 @@ function _resolveAbyssDodge(plan, turnInfo) {
         if (tIsPlayer) { if (!plan.player || !plan.player.file) return null; u = plan.player; attackerX = plan.enemy ? plan.enemy.cx : u.cx + 200; }
         else attackerX = plan.player ? plan.player.cx : u.cx - 200;
         const dir = Math.sign(u.cx - attackerX) || (tIsPlayer ? -1 : 1);
-        return { u, dir, dx: dir * 46, dy: -10 };
-    } catch (e) { return null; }
-}
-
-// 🕑 round 10 (abyss dodge parity with the PvP miss redesign): resolve WHICH unit is
-// dodging this turn so drawCombatScene can visually pull it off the swing line.
-function _resolveAbyssDodge(plan, turnInfo) {
-    try {
-        if (!turnInfo || !turnInfo.missed || !plan) return null;
-        const t = turnInfo.target || null;
-        let u = null, attackerX = null;
-        if (t && plan.enemy && ((t.isEnemy && String(t.name || '') === String(plan.enemy.name || '')) || t === plan.enemy.ref)) u = plan.enemy;
-        if (!u && t && t.isEnemy && Array.isArray(plan.pack)) u = (plan.pack || []).find((p) => String(t.name || '') === String(p.plateName || p.name || '')) || null;
-        const tIsPlayer = !u;
-        if (tIsPlayer) { if (!plan.player || !plan.player.file) return null; u = plan.player; attackerX = plan.enemy ? plan.enemy.cx : u.cx + 200; }
-        else attackerX = plan.player ? plan.player.cx : u.cx - 200;
-        const dir = Math.sign(u.cx - attackerX) || (tIsPlayer ? -1 : 1);
         return { u, dir, dx: dir * Math.max(46, Math.min(170, Math.round((u.h || 150) * 0.45))), dy: -10 };
     } catch (e) { return null; }
 }

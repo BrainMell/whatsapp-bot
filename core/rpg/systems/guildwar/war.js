@@ -632,7 +632,7 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
             if (action === 'list') {
                 if (!canStart) return sock.sendMessage(chatId, { text: '❌ Mod only.' });
                 return sock.sendMessage(chatId, {
-                    text: `🌍 *RPG-friendly GCs on this bot* (${list.length}):\n${list.map((c, i) => `  ${i + 1}. ${c}`).join('\n') || '  none yet - mark one with \`${prefix} gw rpg on\`'}`,
+                    text: `🌍 *RPG-friendly GCs on this bot* (${list.length}):\n${list.map((c, i) => `  ${i + 1}. ${c}`).join('\n') || `  none yet - mark one with \`${prefix} gw rpg on\``}`,
                 });
             }
             // status: is THIS group marked?
@@ -659,6 +659,17 @@ async function handleGroupCommand(sock, chatId, senderJid, senderName, args, ctx
                     `🏛️ The Ruins are now an *encounter* on the map: claim them with a ritual for relics.`;
                 return sock.sendMessage(chatId, { text: caption });
             }
+            // 2026-11-28 fix: the legacy caption was lost in the Conquest refactor (cf58a2e58) -> ReferenceError when Conquest is off
+            const caption = `⚔️ *GUILD WAR: THE RUINS*\n` +
+                `\`${prefix} war start\` mods: FULL-SCALE war (~4x map, 3 worlds, announced in every RPG GC)\n` +
+                `\`${prefix} war start -test\` mods: small test skirmish (this GC only)\n` +
+                `\`${prefix} war join\` enter the registering war\n` +
+                `\`${prefix} war forcestart\` mods: deploy now\n` +
+                `\`${prefix} war status\` live standings\n` +
+                `\`${prefix} war end\` mods: conclude and pay rewards\n` +
+                `\`${prefix} war abort\` mods: shut it down, no rewards\n` +
+                `\`${prefix} war rpg on|off\` admins: mark this GC for full-scale calls\n\n` +
+                `In my DMs once deployed: \`map\`, \`move forward/left/back/right\`, \`paths\`, \`relics\`, \`handin\`, \`challenge @name\`, \`share map @mate\`, \`status\`, \`quit\`.`;
             try {
                 const buf = await notice.renderWarHelpCard({ prefix });
                 await sock.sendMessage(chatId, { image: buf, caption });

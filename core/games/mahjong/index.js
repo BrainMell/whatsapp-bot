@@ -192,7 +192,7 @@ async function win(c, g) {
   const prev = scoreOf(senderJid); const pb = !prev || !prev.bestTime || s < prev.bestTime;
   record(g, senderJid, true); games.delete(key(chatId, senderJid));
   let zeni = Math.min(1500, 400 + Math.floor(g.score / 10));
-  try { const economy = require('../rpg/systems/economy/economy'); economy.addMoney(senderJid, zeni, 'Mahjong clear'); } catch (e) { zeni = 0; }
+  try { const economy = require('../../rpg/systems/economy/economy'); economy.addMoney(senderJid, zeni, 'Mahjong clear'); } catch (e) { zeni = 0; }
   const lines = [`${g.name}  -  ${fmt(s)}  -  ${g.moves} moves`, `Score ${g.score}  (time bonus +${bonus})${pb ? '  - new best time!' : ''}`];
   const cap = `🏆 *BOARD CLEARED!* ${g.name}\n⏱ ${fmt(s)} · 🎯 ${g.moves} moves · ⭐ ${g.score} pts${zeni ? `\n💰 +${zeni} Zeni` : ''}${pb ? '\n🥇 New personal best time!' : ''}\n\`${prefix} mj\` to play again · \`${prefix} mj top\``;
   try { const mp4 = await R.winClip({ sub: g.name, left: 0, score: g.score, moves: g.moves, time: fmt(s) }, lines); await sock.sendMessage(chatId, { video: mp4, caption: mark + cap, gifPlayback: true, mimetype: 'video/mp4' }, { quoted: m }); }
