@@ -10302,6 +10302,12 @@ _Use ${botConfig.getPrefix().toLowerCase()} news off to disable_`;
 
                     const gsPost = async (sock2, chatId2, key2, payload) => {
                       if (key2) await sock2.sendMessage(chatId2, { react: { text: "⏳", key: key2 } }).catch(() => {});
+                      // 🏷 Omniverse watermark (bottom-right) on every image/video group status
+                      try {
+                        const __wm = require("./utils/gstatusWatermark");
+                        if (payload.image) payload.image = await __wm.image(payload.image);
+                        else if (payload.video) payload.video = await __wm.video(payload.video);
+                      } catch (e) { /* never block the post */ }
                       const isMedia = !!(payload.image || payload.video || payload.audio || payload.sticker);
                       const t0 = Date.now();
                       if (isMedia) {
